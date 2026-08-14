@@ -101,6 +101,36 @@ export type MovementReport = {
     out_quantity: number;
 };
 
+export type PaymentMethod = 'cash' | 'card' | 'transfer';
+
+export type SaleStatus = 'completed' | 'cancelled';
+
+export type SaleItem = {
+    id: number;
+    product_id: number;
+    quantity: number;
+    unit_price: number;
+    product: Pick<Product, 'id' | 'name' | 'sku' | 'unit'>;
+};
+
+export type Sale = {
+    id: number;
+    reference: string;
+    payment_method: PaymentMethod;
+    payment_label: string;
+    total: number;
+    status: SaleStatus;
+    notes: string | null;
+    created_at: string;
+    user: { id: number; name: string } | null;
+    items: SaleItem[];
+};
+
+export type PosProduct = Pick<
+    Product,
+    'id' | 'name' | 'sku' | 'barcode' | 'unit' | 'sale_price' | 'stock_quantity'
+>;
+
 export type PurchaseOrder = {
     id: number;
     supplier_id: number | null;

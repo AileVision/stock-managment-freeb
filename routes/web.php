@@ -7,6 +7,7 @@ use App\Http\Controllers\Stock\DashboardController;
 use App\Http\Controllers\Stock\ProductController;
 use App\Http\Controllers\Stock\ReplenishmentController;
 use App\Http\Controllers\Stock\ReportsController;
+use App\Http\Controllers\Stock\SalesController;
 use App\Http\Controllers\Stock\StockMovementController;
 use App\Http\Controllers\Stock\SupplierController;
 use Illuminate\Support\Facades\Route;
@@ -64,6 +65,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('movements', [StockMovementController::class, 'store'])
             ->middleware('can:movements.create')
             ->name('stock.movements.store');
+
+        Route::get('sales', [SalesController::class, 'index'])
+            ->middleware('can:sales.view')
+            ->name('stock.sales.index');
+        Route::get('sales/pos', [SalesController::class, 'pos'])
+            ->middleware('can:sales.view')
+            ->name('stock.sales.pos');
+        Route::post('sales', [SalesController::class, 'store'])
+            ->middleware('can:sales.create')
+            ->name('stock.sales.store');
+        Route::delete('sales/{sale}', [SalesController::class, 'destroy'])
+            ->middleware('can:sales.delete')
+            ->name('stock.sales.destroy');
 
         Route::get('replenishment', [ReplenishmentController::class, 'index'])
             ->middleware('can:replenishment.view')

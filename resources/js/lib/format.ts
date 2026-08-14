@@ -1,4 +1,4 @@
-import type { MovementType } from '@/types';
+import type { MovementType, PaymentMethod, SaleStatus } from '@/types';
 
 const CURRENCY = (import.meta.env.VITE_CURRENCY as string | undefined) || 'XOF';
 
@@ -53,4 +53,15 @@ export const MOVEMENT_TYPE_LABELS: Record<MovementType, string> = {
     in: 'Entrée',
     out: 'Sortie',
     adjustment: 'Ajustement',
+};
+
+export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+    cash: 'Espèces',
+    card: 'Carte bancaire',
+    transfer: 'Virement',
+};
+
+export const SALE_STATUS_LABELS: Record<SaleStatus, string> = {
+    completed: 'Validée',
+    cancelled: 'Annulée',
 };

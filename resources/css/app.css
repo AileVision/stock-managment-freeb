@@ -141,3 +141,21 @@
         @apply bg-background text-foreground;
     }
 }
+
+/* Impression du ticket de caisse : seule la zone .print-area est visible. */
+@media print {
+    body * {
+        visibility: hidden;
+    }
+
+    .print-area,
+    .print-area * {
+        visibility: visible;
+    }
+
+    .print-area {
+        position: fixed;
+        inset: 0;
+        overflow: visible;
+    }
+}

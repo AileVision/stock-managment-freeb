@@ -6,6 +6,8 @@ import {
     LayoutGrid,
     Package,
     ShieldCheck,
+    ShoppingCart,
+    Store,
     Tags,
     Truck,
     Users,
@@ -57,6 +59,24 @@ export function AppSidebar() {
             href: stock.movements.index(),
             icon: ArrowLeftRight,
         },
+        ...(permissions.includes('sales.create')
+            ? [
+                  {
+                      title: 'Caisse',
+                      href: stock.sales.pos(),
+                      icon: Store,
+                  },
+              ]
+            : []),
+        ...(permissions.includes('sales.view')
+            ? [
+                  {
+                      title: 'Ventes',
+                      href: stock.sales.index(),
+                      icon: ShoppingCart,
+                  },
+              ]
+            : []),
         ...(permissions.includes('replenishment.view')
             ? [
                   {
