@@ -143,7 +143,9 @@ return [
     |
     */
 
-    'path' => env('SESSION_PATH', '/'),
+    // Hardcodé à '/' : Git Bash exporte une variable SESSION_PATH polluée
+    // ("C:/Program Files/Git/") qui rendrait ce chemin de cookie invalide.
+    'path' => '/',
 
     /*
     |--------------------------------------------------------------------------

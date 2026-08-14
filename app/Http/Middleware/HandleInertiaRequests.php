@@ -2,8 +2,10 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
+use Spatie\Permission\Models\Permission;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -40,8 +42,28 @@ class HandleInertiaRequests extends Middleware
             'name' => config('app.name'),
             'auth' => [
                 'user' => $request->user(),
+                'permissions' => $this->userPermissions($request->user()),
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];
+    }
+
+    /**
+     * Resolve the permissions visible to a user. The superadmin sees every
+     * permission, so that new permissions stay visible without reseeding.
+     *
+     * @return array<int, string>
+     */
+    private function userPermissions(?User $user): array
+    {
+        if ($user === null) {
+            return [];
+        }
+
+        if ($user->hasRole('superadmin')) {
+            return Permission::query()->orderBy('name')->pluck('name')->all();
+        }
+
+        return $user->getAllPermissions()->pluck('name')->all();
     }
 }
