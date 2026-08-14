@@ -2,9 +2,13 @@
 
 use App\Http\Controllers\Admin\RolesController;
 use App\Http\Controllers\Admin\UsersController;
+use App\Http\Controllers\Stock\CashSessionController;
 use App\Http\Controllers\Stock\CategoryController;
+use App\Http\Controllers\Stock\CustomerController;
 use App\Http\Controllers\Stock\DashboardController;
+use App\Http\Controllers\Stock\InvoiceController;
 use App\Http\Controllers\Stock\ProductController;
+use App\Http\Controllers\Stock\QuoteController;
 use App\Http\Controllers\Stock\ReplenishmentController;
 use App\Http\Controllers\Stock\ReportsController;
 use App\Http\Controllers\Stock\SalesController;
@@ -59,6 +63,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->middleware('can:suppliers.delete')
             ->name('stock.suppliers.destroy');
 
+        Route::get('customers', [CustomerController::class, 'index'])
+            ->middleware('can:customers.view')
+            ->name('stock.customers.index');
+        Route::post('customers', [CustomerController::class, 'store'])
+            ->middleware('can:customers.create')
+            ->name('stock.customers.store');
+        Route::patch('customers/{customer}', [CustomerController::class, 'update'])
+            ->middleware('can:customers.update')
+            ->name('stock.customers.update');
+        Route::delete('customers/{customer}', [CustomerController::class, 'destroy'])
+            ->middleware('can:customers.delete')
+            ->name('stock.customers.destroy');
+
         Route::get('movements', [StockMovementController::class, 'index'])
             ->middleware('can:movements.view')
             ->name('stock.movements.index');
@@ -78,6 +95,48 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('sales/{sale}', [SalesController::class, 'destroy'])
             ->middleware('can:sales.delete')
             ->name('stock.sales.destroy');
+        Route::get('sales/{sale}/pdf', [SalesController::class, 'ticketPdf'])
+            ->middleware('can:sales.view')
+            ->name('stock.sales.ticket-pdf');
+
+        Route::get('cash-sessions', [CashSessionController::class, 'index'])
+            ->middleware('can:sessions.view')
+            ->name('stock.sessions.index');
+        Route::post('cash-sessions', [CashSessionController::class, 'store'])
+            ->middleware('can:sessions.open')
+            ->name('stock.sessions.store');
+        Route::post('cash-sessions/{cashSession}/close', [CashSessionController::class, 'close'])
+            ->middleware('can:sessions.close')
+            ->name('stock.sessions.close');
+
+        Route::get('quotes', [QuoteController::class, 'index'])
+            ->middleware('can:quotes.view')
+            ->name('stock.quotes.index');
+        Route::post('quotes', [QuoteController::class, 'store'])
+            ->middleware('can:quotes.create')
+            ->name('stock.quotes.store');
+        Route::patch('quotes/{quote}', [QuoteController::class, 'update'])
+            ->middleware('can:quotes.update')
+            ->name('stock.quotes.update');
+        Route::delete('quotes/{quote}', [QuoteController::class, 'destroy'])
+            ->middleware('can:quotes.delete')
+            ->name('stock.quotes.destroy');
+        Route::patch('quotes/{quote}/status', [QuoteController::class, 'status'])
+            ->middleware('can:quotes.update')
+            ->name('stock.quotes.status');
+        Route::post('quotes/{quote}/convert', [QuoteController::class, 'convert'])
+            ->middleware('can:quotes.update')
+            ->name('stock.quotes.convert');
+
+        Route::get('invoices', [InvoiceController::class, 'index'])
+            ->middleware('can:invoices.view')
+            ->name('stock.invoices.index');
+        Route::post('invoices', [InvoiceController::class, 'store'])
+            ->middleware('can:invoices.create')
+            ->name('stock.invoices.store');
+        Route::get('invoices/{invoice}/pdf', [InvoiceController::class, 'pdf'])
+            ->middleware('can:invoices.view')
+            ->name('stock.invoices.pdf');
 
         Route::get('replenishment', [ReplenishmentController::class, 'index'])
             ->middleware('can:replenishment.view')
@@ -95,6 +154,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('reports/movements/export', [ReportsController::class, 'exportMovements'])
             ->middleware('can:reports.export')
             ->name('stock.reports.movements.export');
+        Route::get('reports/sales', [ReportsController::class, 'sales'])
+            ->middleware('can:reports.view')
+            ->name('stock.reports.sales');
     });
 
     Route::prefix('admin')->group(function () {

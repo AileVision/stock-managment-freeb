@@ -119,11 +119,131 @@ export type Sale = {
     payment_method: PaymentMethod;
     payment_label: string;
     total: number;
+    discount_percent: number;
     status: SaleStatus;
     notes: string | null;
     created_at: string;
     user: { id: number; name: string } | null;
     items: SaleItem[];
+    invoice: { id: number; reference: string } | null;
+};
+
+export type Customer = {
+    id: number;
+    name: string;
+    email: string | null;
+    phone: string | null;
+    address: string | null;
+    notes: string | null;
+    quotes_count?: number;
+    invoices_count?: number;
+    created_at: string;
+};
+
+export type CustomerOption = Pick<Customer, 'id' | 'name' | 'email'>;
+
+export type QuoteStatus =
+    'draft' | 'sent' | 'accepted' | 'converted' | 'rejected';
+
+export type QuoteItem = {
+    id: number;
+    product_id: number | null;
+    product_name: string;
+    quantity: number;
+    unit_price: number;
+};
+
+export type Quote = {
+    id: number;
+    reference: string;
+    customer_name: string;
+    customer_email: string | null;
+    customer_phone: string | null;
+    customer_address: string | null;
+    status: QuoteStatus;
+    valid_until: string | null;
+    notes: string | null;
+    subtotal: number;
+    discount_percent: number;
+    discount_amount: number;
+    total: number;
+    created_at: string;
+    user: { id: number; name: string } | null;
+    items: QuoteItem[];
+    sale_reference: string | null;
+};
+
+export type QuoteFormProduct = Pick<
+    Product,
+    'id' | 'name' | 'sku' | 'sale_price'
+>;
+
+export type Invoice = {
+    id: number;
+    reference: string;
+    sale_id: number | null;
+    sale_reference: string | null;
+    customer_name: string;
+    customer_email: string | null;
+    customer_address: string | null;
+    issued_at: string;
+    total: number;
+    discount_percent: number;
+    notes: string | null;
+    created_at: string;
+    user: { id: number; name: string } | null;
+};
+
+export type SalesReportSummary = {
+    revenue: number;
+    sales_count: number;
+    average_basket: number;
+    margin: number;
+    margin_rate: number;
+};
+
+export type DailyRevenue = {
+    day: string;
+    sales_count: number;
+    revenue: number;
+};
+
+export type PaymentBreakdown = {
+    payment_method: PaymentMethod;
+    payment_label: string;
+    sales_count: number;
+    revenue: number;
+};
+
+export type TopProduct = {
+    product_id: number;
+    name: string;
+    sku: string;
+    quantity: number;
+    revenue: number;
+    cost: number;
+    margin: number;
+    margin_rate: number;
+};
+
+export type UninvoicedSale = Pick<
+    Sale,
+    'id' | 'reference' | 'total' | 'created_at' | 'payment_method'
+>;
+
+export type CashSession = {
+    id: number;
+    opened_at: string;
+    closed_at: string | null;
+    opening_cash: number;
+    expected_cash: number | null;
+    counted_cash: number | null;
+    difference: number | null;
+    cash_total: number;
+    sales_count: number;
+    is_open: boolean;
+    notes: string | null;
+    user: { id: number; name: string } | null;
 };
 
 export type PosProduct = Pick<

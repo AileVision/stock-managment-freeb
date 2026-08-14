@@ -1,5 +1,12 @@
 import { Head, router, usePage } from '@inertiajs/react';
-import { Ban, Eye, ShoppingCart, Undo2 } from 'lucide-react';
+import {
+    Ban,
+    Download,
+    Eye,
+    FileCheck2,
+    ShoppingCart,
+    Undo2,
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -393,6 +400,7 @@ export default function Sales({ sales, filters }: Props) {
                                 <TableHead>Paiement</TableHead>
                                 <TableHead>Statut</TableHead>
                                 <TableHead>Par</TableHead>
+                                <TableHead>Facture</TableHead>
                                 <TableHead className="text-right">
                                     Actions
                                 </TableHead>
@@ -436,8 +444,43 @@ export default function Sales({ sales, filters }: Props) {
                                     <TableCell className="text-muted-foreground">
                                         {sale.user?.name ?? '—'}
                                     </TableCell>
+                                    <TableCell>
+                                        {sale.invoice ? (
+                                            <Badge
+                                                variant="outline"
+                                                className="gap-1.5 border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                            >
+                                                <FileCheck2 className="size-3" />
+                                                {sale.invoice.reference}
+                                            </Badge>
+                                        ) : (
+                                            <span className="text-muted-foreground">
+                                                —
+                                            </span>
+                                        )}
+                                    </TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex items-center justify-end gap-1">
+                                            {sale.status === 'completed' && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    asChild
+                                                    aria-label={`Ticket PDF de la vente ${sale.reference}`}
+                                                >
+                                                    <a
+                                                        href={
+                                                            stock.sales.ticketPdf(
+                                                                sale.id,
+                                                            ).url
+                                                        }
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                    >
+                                                        <Download />
+                                                    </a>
+                                                </Button>
+                                            )}
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
@@ -471,7 +514,7 @@ export default function Sales({ sales, filters }: Props) {
                             {sales.data.length === 0 && (
                                 <TableRow>
                                     <TableCell
-                                        colSpan={8}
+                                        colSpan={9}
                                         className="h-40 text-center text-muted-foreground"
                                     >
                                         <div className="flex flex-col items-center gap-2">

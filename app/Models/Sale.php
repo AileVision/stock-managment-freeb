@@ -7,22 +7,27 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
  * @property string $reference
+ * @property int|null $session_id
  * @property int|null $user_id
  * @property string $payment_method
  * @property string $total
+ * @property string $discount_percent
  * @property string $status
  * @property string|null $notes
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
+ * @property-read CashSession|null $session
  * @property-read User|null $user
  * @property-read Collection<int, SaleItem> $items
+ * @property-read Invoice|null $invoice
  */
-#[Fillable(['reference', 'user_id', 'payment_method', 'total', 'status', 'notes'])]
+#[Fillable(['reference', 'session_id', 'user_id', 'payment_method', 'total', 'discount_percent', 'status', 'notes'])]
 class Sale extends Model
 {
     /**
@@ -49,6 +54,26 @@ class Sale extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * The cash register session the sale belongs to, if any.
+     *
+     * @return BelongsTo<CashSession, $this>
+     */
+    public function session(): BelongsTo
+    {
+        return $this->belongsTo(CashSession::class);
+    }
+
+    /**
+     * The invoice issued for this sale, if any.
+     *
+     * @return HasOne<Invoice, $this>
+     */
+    public function invoice(): HasOne
+    {
+        return $this->hasOne(Invoice::class);
     }
 
     /**

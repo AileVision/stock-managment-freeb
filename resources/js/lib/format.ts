@@ -1,4 +1,9 @@
-import type { MovementType, PaymentMethod, SaleStatus } from '@/types';
+import type {
+    MovementType,
+    PaymentMethod,
+    QuoteStatus,
+    SaleStatus,
+} from '@/types';
 
 const CURRENCY = (import.meta.env.VITE_CURRENCY as string | undefined) || 'XOF';
 
@@ -65,3 +70,21 @@ export const SALE_STATUS_LABELS: Record<SaleStatus, string> = {
     completed: 'Validée',
     cancelled: 'Annulée',
 };
+
+export const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
+    draft: 'Brouillon',
+    sent: 'Envoyé',
+    accepted: 'Accepté',
+    converted: 'Converti',
+    rejected: 'Refusé',
+};
+
+export function formatDateOnly(value: string | null | undefined): string {
+    if (!value) {
+        return '—';
+    }
+
+    return new Intl.DateTimeFormat('fr-FR', {
+        dateStyle: 'medium',
+    }).format(new Date(value));
+}

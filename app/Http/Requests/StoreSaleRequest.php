@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests;
 
+use App\Models\CashSession;
 use App\Models\Sale;
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -28,8 +30,24 @@ class StoreSaleRequest extends FormRequest
             'items.*.product_id' => ['required', 'exists:products,id'],
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:9999999'],
             'payment_method' => ['required', Rule::in(array_keys(Sale::PAYMENT_METHODS))],
+            'session_id' => ['nullable', 'exists:cash_sessions,id'],
+            'discount_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ];
+    }
+
+    /**
+     * The referenced session must still be open.
+     */
+    public function withValidator(\Illuminate\Validation\Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            $session = CashSession::query()->whereKey((int) $this->input('session_id'))->first();
+
+            if ($session !== null && ! $session->isOpen()) {
+                $validator->errors()->add('session_id', 'La session de caisse est fermée.');
+            }
+        });
     }
 
     /**
@@ -49,6 +67,9 @@ class StoreSaleRequest extends FormRequest
             'items.*.quantity.max' => 'La quantité ne doit pas dépasser 9999999.',
             'payment_method.required' => 'Veuillez choisir un mode de paiement.',
             'payment_method.in' => 'Le mode de paiement sélectionné n’est pas valide.',
+            'discount_percent.numeric' => 'La remise doit être un nombre.',
+            'discount_percent.min' => 'La remise doit être positive ou nulle.',
+            'discount_percent.max' => 'La remise ne doit pas dépasser 100 %.',
             'notes.max' => 'La remarque ne doit pas dépasser 1000 caractères.',
         ];
     }

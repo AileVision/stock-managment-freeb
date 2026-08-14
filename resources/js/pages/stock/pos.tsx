@@ -2,6 +2,7 @@ import { Head, router, useForm, usePage } from '@inertiajs/react';
 import {
     Barcode,
     CheckCircle2,
+    Download,
     Minus,
     PackageX,
     Plus,
@@ -9,6 +10,7 @@ import {
     ScanBarcode,
     ShoppingCart,
     Trash2,
+    Wallet,
 } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
@@ -34,14 +36,22 @@ import {
 import {
     formatCurrency,
     formatDate,
+    formatDateOnly,
     PAYMENT_METHOD_LABELS,
 } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import stock from '@/routes/stock';
-import type { Auth, PaymentMethod, PosProduct, Sale } from '@/types';
+import type {
+    Auth,
+    CashSession,
+    PaymentMethod,
+    PosProduct,
+    Sale,
+} from '@/types';
 
 type Props = {
     products: PosProduct[];
+    open_session: CashSession | null;
 };
 
 type CartItem = {
@@ -49,9 +59,284 @@ type CartItem = {
     quantity: number;
 };
 
-export default function Pos({ products }: Props) {
+function SessionPanel({
+    session,
+    canOpen,
+    canClose,
+}: {
+    session: CashSession | null;
+    canOpen: boolean;
+    canClose: boolean;
+}) {
+    const [openDialog, setOpenDialog] = useState(false);
+    const [closeDialog, setCloseDialog] = useState(false);
+
+    const openForm = useForm<{ opening_cash: string; notes: string }>({
+        opening_cash: '0',
+        notes: '',
+    });
+
+    const closeForm = useForm<{ counted_cash: string; notes: string }>({
+        counted_cash: '',
+        notes: '',
+    });
+
+    const submitOpen = (event: FormEvent) => {
+        event.preventDefault();
+
+        openForm.post(stock.sessions.store().url, {
+            preserveScroll: true,
+            onSuccess: () => {
+                setOpenDialog(false);
+                openForm.reset();
+                router.reload({ only: ['open_session'] });
+            },
+        });
+    };
+
+    const submitClose = (event: FormEvent) => {
+        event.preventDefault();
+
+        if (!session) {
+            return;
+        }
+
+        closeForm.post(stock.sessions.close(session.id).url, {
+            preserveScroll: true,
+            onSuccess: () => {
+                setCloseDialog(false);
+                closeForm.reset();
+                router.reload({ only: ['open_session'] });
+            },
+        });
+    };
+
+    if (!session) {
+        return canOpen ? (
+            <div className="flex flex-col gap-3 rounded-xl border border-dashed p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3">
+                    <span className="flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                        <Wallet className="size-5" />
+                    </span>
+                    <div>
+                        <p className="text-sm font-medium">
+                            Aucune session ouverte
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                            Ouvrez la caisse pour enregistrer les ventes et
+                            comptabiliser l’argent en fin de journée.
+                        </p>
+                    </div>
+                </div>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setOpenDialog(true)}
+                >
+                    Ouvrir la caisse
+                </Button>
+            </div>
+        ) : null;
+    }
+
+    return (
+        <>
+            <div className="flex flex-col gap-3 rounded-xl border bg-emerald-500/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3">
+                    <span className="flex size-10 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                        <Wallet className="size-5" />
+                    </span>
+                    <div>
+                        <p className="text-sm font-medium">
+                            Session ouverte ·{' '}
+                            {formatDateOnly(session.opened_at)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                            Fonds d’ouverture{' '}
+                            {formatCurrency(session.opening_cash)} ·{' '}
+                            {session.sales_count} vente
+                            {session.sales_count > 1 ? 's' : ''} ·{' '}
+                            {formatCurrency(session.cash_total)} encaissé
+                        </p>
+                    </div>
+                </div>
+                {canClose && (
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCloseDialog(true)}
+                    >
+                        Clôturer la caisse
+                    </Button>
+                )}
+            </div>
+
+            {/* Open session dialog */}
+            <Dialog open={openDialog} onOpenChange={setOpenDialog}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Ouvrir la caisse</DialogTitle>
+                    </DialogHeader>
+                    <form
+                        id="open-session-form"
+                        onSubmit={submitOpen}
+                        className="grid gap-4"
+                    >
+                        <div className="space-y-2">
+                            <Label htmlFor="opening_cash">
+                                Fonds de caisse (espèces au départ)
+                            </Label>
+                            <Input
+                                id="opening_cash"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={openForm.data.opening_cash}
+                                onChange={(e) =>
+                                    openForm.setData(
+                                        'opening_cash',
+                                        e.target.value,
+                                    )
+                                }
+                                placeholder="0"
+                            />
+                            <InputError
+                                message={openForm.errors.opening_cash}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="session-notes">Remarque</Label>
+                            <Input
+                                id="session-notes"
+                                value={openForm.data.notes}
+                                onChange={(e) =>
+                                    openForm.setData('notes', e.target.value)
+                                }
+                                placeholder="Optionnel"
+                            />
+                            <InputError message={openForm.errors.notes} />
+                        </div>
+                        <DialogFooter>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setOpenDialog(false)}
+                            >
+                                Annuler
+                            </Button>
+                            <Button
+                                type="submit"
+                                disabled={openForm.processing}
+                            >
+                                Ouvrir la session
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* Close session dialog */}
+            <Dialog open={closeDialog} onOpenChange={setCloseDialog}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Clôturer la caisse</DialogTitle>
+                    </DialogHeader>
+                    <form
+                        id="close-session-form"
+                        onSubmit={submitClose}
+                        className="grid gap-4"
+                    >
+                        <div className="space-y-1 rounded-xl border p-4 text-sm">
+                            <p className="flex justify-between">
+                                <span className="text-muted-foreground">
+                                    Fonds d’ouverture
+                                </span>
+                                <span className="font-medium tabular-nums">
+                                    {formatCurrency(session.opening_cash)}
+                                </span>
+                            </p>
+                            <p className="flex justify-between">
+                                <span className="text-muted-foreground">
+                                    Encaissé (espèces)
+                                </span>
+                                <span className="font-medium tabular-nums">
+                                    {formatCurrency(session.cash_total)}
+                                </span>
+                            </p>
+                            <p className="flex justify-between border-t pt-2">
+                                <span className="font-medium">
+                                    Caisse attendue
+                                </span>
+                                <span className="font-semibold tabular-nums">
+                                    {formatCurrency(
+                                        session.opening_cash +
+                                            session.cash_total,
+                                    )}
+                                </span>
+                            </p>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="counted_cash">
+                                Montant compté dans le tiroir
+                            </Label>
+                            <Input
+                                id="counted_cash"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={closeForm.data.counted_cash}
+                                onChange={(e) =>
+                                    closeForm.setData(
+                                        'counted_cash',
+                                        e.target.value,
+                                    )
+                                }
+                                placeholder="0"
+                                required
+                            />
+                            <InputError
+                                message={closeForm.errors.counted_cash}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="close-notes">Remarque</Label>
+                            <Input
+                                id="close-notes"
+                                value={closeForm.data.notes}
+                                onChange={(e) =>
+                                    closeForm.setData('notes', e.target.value)
+                                }
+                                placeholder="Optionnel"
+                            />
+                            <InputError message={closeForm.errors.notes} />
+                        </div>
+                        <DialogFooter>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setCloseDialog(false)}
+                            >
+                                Annuler
+                            </Button>
+                            <Button
+                                type="submit"
+                                disabled={closeForm.processing}
+                            >
+                                Clôturer la session
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+        </>
+    );
+}
+
+export default function Pos({ products, open_session }: Props) {
     const { permissions } = usePage<{ auth: Auth }>().props.auth;
     const canCreate = permissions.includes('sales.create');
+    const canOpenSession = permissions.includes('sessions.open');
+    const canCloseSession = permissions.includes('sessions.close');
 
     const sale = usePage<{ sale?: Sale | null }>().props.sale ?? null;
 
@@ -70,9 +355,13 @@ export default function Pos({ products }: Props) {
     const form = useForm<{
         items: { product_id: number; quantity: number }[];
         payment_method: PaymentMethod;
+        session_id: number | null;
+        discount_percent: string;
     }>({
         items: [],
         payment_method: 'cash',
+        session_id: open_session?.id ?? null,
+        discount_percent: '0',
     });
 
     const dismissReceipt = () => {
@@ -134,10 +423,14 @@ export default function Pos({ products }: Props) {
         [cart, products],
     );
 
-    const total = cartItems.reduce(
+    const subtotal = cartItems.reduce(
         (sum, item) => sum + Number(item.product.sale_price) * item.quantity,
         0,
     );
+
+    const discountPercent = Number(form.data.discount_percent) || 0;
+    const discountAmount = (subtotal * discountPercent) / 100;
+    const total = subtotal - discountAmount;
 
     const filteredProducts = useMemo(() => {
         const query = search.trim().toLowerCase();
@@ -189,13 +482,14 @@ export default function Pos({ products }: Props) {
             return;
         }
 
-        form.setData(
-            'items',
-            cartItems.map((item) => ({
+        form.setData({
+            items: cartItems.map((item) => ({
                 product_id: item.product.id,
                 quantity: item.quantity,
             })),
-        );
+            session_id: open_session?.id ?? null,
+            discount_percent: form.data.discount_percent,
+        });
 
         form.post(stock.sales.store().url, {
             preserveScroll: true,
@@ -227,6 +521,12 @@ export default function Pos({ products }: Props) {
                         </a>
                     </Button>
                 </div>
+
+                <SessionPanel
+                    session={open_session}
+                    canOpen={canOpenSession}
+                    canClose={canCloseSession}
+                />
 
                 <div className="grid gap-6 lg:grid-cols-5">
                     {/* Product area */}
@@ -437,6 +737,45 @@ export default function Pos({ products }: Props) {
                                 onSubmit={submit}
                                 className="flex flex-col gap-3 border-t p-4"
                             >
+                                <div className="space-y-2">
+                                    <Label htmlFor="discount_percent">
+                                        Remise (%)
+                                    </Label>
+                                    <div className="relative">
+                                        <Input
+                                            id="discount_percent"
+                                            type="number"
+                                            min="0"
+                                            max="100"
+                                            step="0.5"
+                                            value={form.data.discount_percent}
+                                            onChange={(e) =>
+                                                form.setData(
+                                                    'discount_percent',
+                                                    e.target.value,
+                                                )
+                                            }
+                                            className="h-9 pr-8"
+                                        />
+                                        <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs text-muted-foreground">
+                                            %
+                                        </span>
+                                    </div>
+                                    <InputError
+                                        message={form.errors.discount_percent}
+                                    />
+                                </div>
+
+                                {discountAmount > 0 && (
+                                    <div className="flex items-center justify-between text-sm">
+                                        <span className="text-muted-foreground">
+                                            Remise ({discountPercent}%)
+                                        </span>
+                                        <span className="text-red-600 tabular-nums dark:text-red-400">
+                                            − {formatCurrency(discountAmount)}
+                                        </span>
+                                    </div>
+                                )}
                                 <div className="flex items-center justify-between text-sm">
                                     <span className="text-muted-foreground">
                                         Total à payer
@@ -549,12 +888,22 @@ export default function Pos({ products }: Props) {
                             </div>
 
                             <DialogFooter className="gap-2 sm:justify-center">
+                                <a
+                                    href={stock.sales.ticketPdf(sale.id).url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                >
+                                    <Button variant="outline">
+                                        <Download />
+                                        Ticket PDF
+                                    </Button>
+                                </a>
                                 <Button
                                     variant="outline"
                                     onClick={() => window.print()}
                                 >
                                     <Printer />
-                                    Imprimer le ticket
+                                    Imprimer
                                 </Button>
                                 <Button
                                     onClick={() => {

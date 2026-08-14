@@ -3,14 +3,19 @@ import {
     ArrowLeftRight,
     BarChart3,
     ClipboardList,
+    Contact,
+    FileCheck2,
+    FileText,
     LayoutGrid,
     Package,
     ShieldCheck,
     ShoppingCart,
     Store,
     Tags,
+    TrendingUp,
     Truck,
     Users,
+    Wallet,
 } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavMain } from '@/components/nav-main';
@@ -54,6 +59,15 @@ export function AppSidebar() {
             href: stock.suppliers.index(),
             icon: Truck,
         },
+        ...(permissions.includes('customers.view')
+            ? [
+                  {
+                      title: 'Clients',
+                      href: stock.customers.index(),
+                      icon: Contact,
+                  },
+              ]
+            : []),
         {
             title: 'Mouvements',
             href: stock.movements.index(),
@@ -77,6 +91,33 @@ export function AppSidebar() {
                   },
               ]
             : []),
+        ...(permissions.includes('quotes.view')
+            ? [
+                  {
+                      title: 'Devis',
+                      href: stock.quotes.index(),
+                      icon: FileText,
+                  },
+              ]
+            : []),
+        ...(permissions.includes('invoices.view')
+            ? [
+                  {
+                      title: 'Factures',
+                      href: stock.invoices.index(),
+                      icon: FileCheck2,
+                  },
+              ]
+            : []),
+        ...(permissions.includes('sessions.view')
+            ? [
+                  {
+                      title: 'Sessions de caisse',
+                      href: stock.sessions.index(),
+                      icon: Wallet,
+                  },
+              ]
+            : []),
         ...(permissions.includes('replenishment.view')
             ? [
                   {
@@ -92,6 +133,11 @@ export function AppSidebar() {
                       title: 'Rapports',
                       href: stock.reports.index(),
                       icon: BarChart3,
+                  },
+                  {
+                      title: 'Rapport de ventes',
+                      href: stock.reports.sales(),
+                      icon: TrendingUp,
                   },
               ]
             : []),
