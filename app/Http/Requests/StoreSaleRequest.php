@@ -32,13 +32,17 @@ class StoreSaleRequest extends FormRequest
             'payment_method' => ['required', Rule::in(array_keys(Sale::PAYMENT_METHODS))],
             'session_id' => ['nullable', 'exists:cash_sessions,id'],
             'warehouse_id' => ['nullable', 'exists:warehouses,id'],
+            'tax_rate_id' => ['nullable', 'exists:tax_rates,id'],
             'discount_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'mobile_phone' => ['nullable', 'string', 'max:20'],
+            'mobile_reference' => ['nullable', 'string', 'max:100'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ];
     }
 
     /**
-     * The referenced session must still be open.
+     * The referenced session must still be open and mobile payments require
+     * a phone number.
      */
     public function withValidator(\Illuminate\Validation\Validator $validator): void
     {
@@ -47,6 +51,16 @@ class StoreSaleRequest extends FormRequest
 
             if ($session !== null && ! $session->isOpen()) {
                 $validator->errors()->add('session_id', 'La session de caisse est fermée.');
+            }
+
+            if (in_array($this->input('payment_method'), Sale::MOBILE_PAYMENT_METHODS, true)) {
+                $phone = trim((string) $this->input('mobile_phone'));
+
+                if ($phone === '') {
+                    $validator->errors()->add('mobile_phone', 'Le numéro de téléphone mobile est obligatoire pour ce mode de paiement.');
+                } elseif (preg_match('/^[0-9+ ]{6,20}$/', $phone) !== 1) {
+                    $validator->errors()->add('mobile_phone', 'Le numéro de téléphone mobile est invalide.');
+                }
             }
         });
     }
@@ -69,6 +83,9 @@ class StoreSaleRequest extends FormRequest
             'payment_method.required' => 'Veuillez choisir un mode de paiement.',
             'payment_method.in' => 'Le mode de paiement sélectionné n’est pas valide.',
             'warehouse_id.exists' => 'L’entrepôt sélectionné n’existe pas.',
+            'tax_rate_id.exists' => 'Le taux de TVA sélectionné n’existe pas.',
+            'mobile_phone.max' => 'Le numéro de téléphone ne doit pas dépasser 20 caractères.',
+            'mobile_reference.max' => 'La référence de transaction ne doit pas dépasser 100 caractères.',
             'discount_percent.numeric' => 'La remise doit être un nombre.',
             'discount_percent.min' => 'La remise doit être positive ou nulle.',
             'discount_percent.max' => 'La remise ne doit pas dépasser 100 %.',

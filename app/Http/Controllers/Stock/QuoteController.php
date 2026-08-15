@@ -11,6 +11,7 @@ use App\Models\Product;
 use App\Models\Quote;
 use App\Models\QuoteItem;
 use App\Models\Sale;
+use App\Models\TaxRate;
 use App\Models\Warehouse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -46,6 +47,12 @@ class QuoteController extends Controller
             'quotes' => $quotes,
             'products' => Product::query()->orderBy('name')->get(['id', 'name', 'sku', 'sale_price']),
             'customers' => Customer::query()->orderBy('name')->get(['id', 'name', 'email', 'phone', 'address']),
+            'tax_rates' => TaxRate::active()->map(fn (TaxRate $taxRate): array => [
+                'id' => $taxRate->id,
+                'name' => $taxRate->name,
+                'rate' => (float) $taxRate->rate,
+                'is_default' => (bool) $taxRate->is_default,
+            ])->values(),
             'filters' => [
                 'status' => $request->input('status'),
                 'search' => $request->string('search')->toString(),
@@ -71,6 +78,8 @@ class QuoteController extends Controller
                 'customer_address' => $validated['customer_address'] ?? null,
                 'status' => Quote::STATUS_DRAFT,
                 'discount_percent' => $validated['discount_percent'] ?? 0,
+                'tax_rate_id' => $validated['tax_rate_id'] ?? null,
+                'tax_percent' => $this->taxRatePercent((int) ($validated['tax_rate_id'] ?? 0)),
                 'valid_until' => $validated['valid_until'] ?? null,
                 'notes' => $validated['notes'] ?? null,
             ]);
@@ -106,6 +115,8 @@ class QuoteController extends Controller
                 'customer_phone' => $validated['customer_phone'] ?? null,
                 'customer_address' => $validated['customer_address'] ?? null,
                 'discount_percent' => $validated['discount_percent'] ?? 0,
+                'tax_rate_id' => $validated['tax_rate_id'] ?? null,
+                'tax_percent' => $this->taxRatePercent((int) ($validated['tax_rate_id'] ?? 0)),
                 'valid_until' => $validated['valid_until'] ?? null,
                 'notes' => $validated['notes'] ?? null,
             ]);
@@ -213,6 +224,10 @@ class QuoteController extends Controller
                 'payment_method' => $validated['payment_method'],
                 'total' => $total,
                 'discount_percent' => $discountPercent,
+                'tax_rate_id' => $quote->tax_rate_id,
+                'tax_percent' => $quote->tax_percent,
+                'mobile_phone' => $validated['mobile_phone'] ?? null,
+                'mobile_reference' => $validated['mobile_reference'] ?? null,
                 'status' => Sale::STATUS_COMPLETED,
                 'notes' => "Vente issue du devis {$quote->reference}",
             ]);
@@ -305,6 +320,10 @@ class QuoteController extends Controller
         $discountAmount = round($subtotal * $discountPercent / 100, 2);
         $total = round($subtotal - $discountAmount, 2);
 
+        $taxRate = $quote->taxRate;
+        $taxPercent = $taxRate !== null ? (float) $taxRate->rate : 0.0;
+        $taxAmount = $taxPercent > 0 ? round($total - $total / (1 + $taxPercent / 100), 2) : 0.0;
+
         return [
             'id' => $quote->id,
             'reference' => $quote->reference,
@@ -318,6 +337,9 @@ class QuoteController extends Controller
             'subtotal' => $subtotal,
             'discount_percent' => $discountPercent,
             'discount_amount' => $discountAmount,
+            'tax_rate_id' => $quote->tax_rate_id,
+            'tax_percent' => $taxPercent,
+            'tax_amount' => $taxAmount,
             'total' => $total,
             'created_at' => $quote->created_at,
             'user' => $quote->user,
@@ -330,6 +352,20 @@ class QuoteController extends Controller
             ]),
             'sale_reference' => $quote->sale?->reference,
         ];
+    }
+
+    /**
+     * Resolve the percentage of a tax rate by id.
+     */
+    private function taxRatePercent(int $taxRateId): float
+    {
+        if ($taxRateId <= 0) {
+            return 0.0;
+        }
+
+        $rate = TaxRate::query()->find($taxRateId);
+
+        return $rate !== null ? (float) $rate->rate : 0.0;
     }
 
     /**

@@ -64,7 +64,13 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
     cash: 'Espèces',
     card: 'Carte bancaire',
     transfer: 'Virement',
+    tmoney: 'T-Money',
+    flooz: 'Flooz',
 };
+
+export function isMobilePayment(method: PaymentMethod): boolean {
+    return method === 'tmoney' || method === 'flooz';
+}
 
 export const SALE_STATUS_LABELS: Record<SaleStatus, string> = {
     completed: 'Validée',

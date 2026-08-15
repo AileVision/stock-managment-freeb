@@ -16,6 +16,7 @@ use App\Http\Controllers\Stock\ReportsController;
 use App\Http\Controllers\Stock\SalesController;
 use App\Http\Controllers\Stock\StockMovementController;
 use App\Http\Controllers\Stock\SupplierController;
+use App\Http\Controllers\Stock\TaxRateController;
 use App\Http\Controllers\Stock\TransferController;
 use App\Http\Controllers\Stock\WarehouseController;
 use Illuminate\Support\Facades\Route;
@@ -209,6 +210,28 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('reports/sales/pdf', [ReportsController::class, 'salesPdf'])
             ->middleware('can:reports.view')
             ->name('stock.reports.sales.pdf');
+        Route::get('reports/financial', [ReportsController::class, 'financial'])
+            ->middleware('can:reports.view')
+            ->name('stock.reports.financial');
+        Route::get('reports/financial/export', [ReportsController::class, 'financialExport'])
+            ->middleware('can:reports.export')
+            ->name('stock.reports.financial.export');
+
+        Route::get('taxes', [TaxRateController::class, 'index'])
+            ->middleware('can:taxes.view')
+            ->name('stock.taxes.index');
+        Route::post('taxes', [TaxRateController::class, 'store'])
+            ->middleware('can:taxes.manage')
+            ->name('stock.taxes.store');
+        Route::patch('taxes/{taxRate}', [TaxRateController::class, 'update'])
+            ->middleware('can:taxes.manage')
+            ->name('stock.taxes.update');
+        Route::patch('taxes/{taxRate}/default', [TaxRateController::class, 'setDefault'])
+            ->middleware('can:taxes.manage')
+            ->name('stock.taxes.set-default');
+        Route::delete('taxes/{taxRate}', [TaxRateController::class, 'destroy'])
+            ->middleware('can:taxes.manage')
+            ->name('stock.taxes.destroy');
     });
 
     Route::prefix('admin')->group(function () {

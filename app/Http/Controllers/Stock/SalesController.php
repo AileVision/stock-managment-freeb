@@ -8,6 +8,7 @@ use App\Models\CashSession;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\SaleItem;
+use App\Models\TaxRate;
 use App\Models\Warehouse;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
@@ -86,6 +87,12 @@ class SalesController extends Controller
                 ? $this->presentSession($openSession)
                 : null,
             'warehouses' => Warehouse::query()->orderBy('name')->get(['id', 'name', 'code', 'is_default']),
+            'tax_rates' => TaxRate::active()->map(fn (TaxRate $taxRate): array => [
+                'id' => $taxRate->id,
+                'name' => $taxRate->name,
+                'rate' => (float) $taxRate->rate,
+                'is_default' => (bool) $taxRate->is_default,
+            ])->values(),
         ]);
     }
 
@@ -136,6 +143,11 @@ class SalesController extends Controller
             $discountPercent = (float) ($validated['discount_percent'] ?? 0);
             $total = round($subtotal * (1 - $discountPercent / 100), 2);
 
+            // TVA incluse : on extrait la taxe du total au taux sélectionné.
+            $taxRate = TaxRate::query()->whereKey((int) ($validated['tax_rate_id'] ?? 0))->first()
+                ?? TaxRate::defaultRate();
+            $taxPercent = $taxRate !== null ? (float) $taxRate->rate : 0.0;
+
             $reference = $this->nextReference();
 
             $sale = Sale::create([
@@ -146,6 +158,10 @@ class SalesController extends Controller
                 'payment_method' => $validated['payment_method'],
                 'total' => $total,
                 'discount_percent' => $discountPercent,
+                'tax_rate_id' => $taxRate?->id,
+                'tax_percent' => $taxPercent,
+                'mobile_phone' => $validated['mobile_phone'] ?? null,
+                'mobile_reference' => $validated['mobile_reference'] ?? null,
                 'status' => Sale::STATUS_COMPLETED,
                 'notes' => $validated['notes'] ?? null,
             ]);
@@ -241,6 +257,10 @@ class SalesController extends Controller
             'payment_label' => Sale::PAYMENT_METHODS[$sale->payment_method] ?? $sale->payment_method,
             'total' => (float) $sale->total,
             'discount_percent' => (float) $sale->discount_percent,
+            'tax_percent' => (float) $sale->tax_percent,
+            'tax_amount' => $sale->taxAmount(),
+            'mobile_phone' => $sale->mobile_phone,
+            'mobile_reference' => $sale->mobile_reference,
             'status' => $sale->status,
             'notes' => $sale->notes,
             'created_at' => $sale->created_at,

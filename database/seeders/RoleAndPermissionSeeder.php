@@ -61,6 +61,8 @@ class RoleAndPermissionSeeder extends Seeder
             'sessions.close',
             'reports.view',
             'reports.export',
+            'taxes.view',
+            'taxes.manage',
             'replenishment.view',
             'replenishment.create',
             'users.manage',
@@ -123,6 +125,7 @@ class RoleAndPermissionSeeder extends Seeder
             'sessions.close',
             'reports.view',
             'reports.export',
+            'taxes.view',
             'replenishment.view',
             'replenishment.create',
         ]);

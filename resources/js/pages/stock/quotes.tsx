@@ -44,6 +44,7 @@ import {
     formatDate,
     formatDateOnly,
     formatNumber,
+    isMobilePayment,
     PAYMENT_METHOD_LABELS,
     QUOTE_STATUS_LABELS,
 } from '@/lib/format';
@@ -56,12 +57,14 @@ import type {
     Quote,
     QuoteFormProduct,
     QuoteStatus,
+    TaxRateOption,
 } from '@/types';
 
 type Props = {
     quotes: Paginated<Quote>;
     products: QuoteFormProduct[];
     customers: CustomerOption[];
+    tax_rates: TaxRateOption[];
     filters: {
         status: string | null;
         search: string;
@@ -82,11 +85,12 @@ type QuoteFormData = {
     customer_address: string;
     valid_until: string;
     discount_percent: string;
+    tax_rate_id: string;
     notes: string;
     items: QuoteItemForm[];
 };
 
-const emptyForm: QuoteFormData = {
+const emptyForm = (defaultTaxRateId: string): QuoteFormData => ({
     customer_id: '',
     customer_name: '',
     customer_email: '',
@@ -94,9 +98,10 @@ const emptyForm: QuoteFormData = {
     customer_address: '',
     valid_until: '',
     discount_percent: '0',
+    tax_rate_id: defaultTaxRateId,
     notes: '',
     items: [],
-};
+});
 
 function toFormData(quote: Quote): QuoteFormData {
     return {
@@ -107,6 +112,8 @@ function toFormData(quote: Quote): QuoteFormData {
         customer_address: quote.customer_address ?? '',
         valid_until: quote.valid_until ?? '',
         discount_percent: String(quote.discount_percent),
+        tax_rate_id:
+            quote.tax_rate_id !== null ? String(quote.tax_rate_id) : '',
         notes: quote.notes ?? '',
         items: quote.items.map((item) => ({
             product_id: String(item.product_id ?? ''),
@@ -130,16 +137,22 @@ function QuoteForm({
     quote,
     products,
     customers,
+    taxRates,
     onDone,
 }: {
     quote: Quote | null;
     products: QuoteFormProduct[];
     customers: CustomerOption[];
+    taxRates: TaxRateOption[];
     onDone: () => void;
 }) {
     const editing = quote !== null;
+    const defaultTaxRate =
+        taxRates.find((taxRate) => taxRate.is_default) ?? taxRates[0] ?? null;
     const form = useForm<QuoteFormData>(
-        editing && quote ? toFormData(quote) : emptyForm,
+        editing && quote
+            ? toFormData(quote)
+            : emptyForm(defaultTaxRate ? String(defaultTaxRate.id) : ''),
     );
 
     const selectCustomer = (value: string) => {
@@ -204,6 +217,17 @@ function QuoteForm({
     const discountPercent = Number(form.data.discount_percent) || 0;
     const discountAmount = (subtotal * discountPercent) / 100;
     const total = subtotal - discountAmount;
+
+    const selectedTaxRate =
+        taxRates.find(
+            (taxRate) => taxRate.id === Number(form.data.tax_rate_id),
+        ) ?? null;
+    const taxPercent = selectedTaxRate?.rate ?? 0;
+    // TVA incluse : extraite du total toutes taxes comprises.
+    const taxAmount =
+        taxPercent > 0
+            ? Math.round((total - total / (1 + taxPercent / 100)) * 100) / 100
+            : 0;
 
     const submit = (event: FormEvent) => {
         event.preventDefault();
@@ -331,6 +355,31 @@ function QuoteForm({
                         }
                     />
                     <InputError message={form.errors.discount_percent} />
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="quote-tax">TVA</Label>
+                    <Select
+                        value={form.data.tax_rate_id || 'none'}
+                        onValueChange={(v) =>
+                            form.setData('tax_rate_id', v === 'none' ? '' : v)
+                        }
+                    >
+                        <SelectTrigger className="w-full">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="none">Sans TVA</SelectItem>
+                            {taxRates.map((taxRate) => (
+                                <SelectItem
+                                    key={taxRate.id}
+                                    value={String(taxRate.id)}
+                                >
+                                    {taxRate.name} ({taxRate.rate}%)
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <InputError message={form.errors.tax_rate_id} />
                 </div>
                 <div className="space-y-2 sm:col-span-2">
                     <Label htmlFor="quote-notes">Remarque</Label>
@@ -468,12 +517,26 @@ function QuoteForm({
                             </span>
                         </p>
                     )}
+                    {taxPercent > 0 && (
+                        <p className="flex items-center gap-3 text-muted-foreground">
+                            TVA ({selectedTaxRate?.name} · {taxPercent}%)
+                            <span className="tabular-nums">
+                                {formatCurrency(taxAmount)}
+                            </span>
+                        </p>
+                    )}
                     <p className="flex items-center gap-3 font-semibold">
-                        Total
+                        Total TTC
                         <span className="tabular-nums">
                             {formatCurrency(total)}
                         </span>
                     </p>
+                    {taxPercent > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                            Montant TTC, dont {formatCurrency(taxAmount)} de TVA
+                            incluse.
+                        </p>
+                    )}
                 </div>
             </div>
 
@@ -543,6 +606,7 @@ export default function Quotes({
     quotes,
     products,
     customers,
+    tax_rates,
     filters,
 }: Props) {
     const { permissions } = usePage<{ auth: Auth }>().props.auth;
@@ -560,8 +624,14 @@ export default function Quotes({
     const [deleteTarget, setDeleteTarget] = useState<Quote | null>(null);
     const [convertTarget, setConvertTarget] = useState<Quote | null>(null);
 
-    const convertForm = useForm<{ payment_method: PaymentMethod }>({
+    const convertForm = useForm<{
+        payment_method: PaymentMethod;
+        mobile_phone: string;
+        mobile_reference: string;
+    }>({
         payment_method: 'transfer',
+        mobile_phone: '',
+        mobile_reference: '',
     });
 
     const mounted = useRef(false);
@@ -757,6 +827,14 @@ export default function Quotes({
                                     </TableCell>
                                     <TableCell className="text-right font-medium tabular-nums">
                                         {formatCurrency(quote.total)}
+                                        {quote.tax_percent > 0 && (
+                                            <div className="text-xs font-normal text-muted-foreground">
+                                                dont TVA{' '}
+                                                {formatCurrency(
+                                                    quote.tax_amount,
+                                                )}
+                                            </div>
+                                        )}
                                     </TableCell>
                                     <TableCell>
                                         <Badge
@@ -936,6 +1014,7 @@ export default function Quotes({
                             quote={editingQuote}
                             products={products}
                             customers={customers}
+                            taxRates={tax_rates}
                             onDone={() => setDialogOpen(false)}
                         />
                     )}
@@ -993,6 +1072,61 @@ export default function Quotes({
                                 message={convertForm.errors.payment_method}
                             />
                         </div>
+                        {isMobilePayment(convertForm.data.payment_method) && (
+                            <div className="space-y-2 rounded-xl border bg-muted/30 p-3">
+                                <div className="space-y-2">
+                                    <Label htmlFor="convert-mobile-phone">
+                                        Numéro{' '}
+                                        {convertForm.data.payment_method ===
+                                        'tmoney'
+                                            ? 'T-Money'
+                                            : 'Flooz'}{' '}
+                                        du client
+                                    </Label>
+                                    <Input
+                                        id="convert-mobile-phone"
+                                        type="tel"
+                                        value={convertForm.data.mobile_phone}
+                                        onChange={(e) =>
+                                            convertForm.setData(
+                                                'mobile_phone',
+                                                e.target.value,
+                                            )
+                                        }
+                                        placeholder="+228 90 00 00 00"
+                                        required
+                                    />
+                                    <InputError
+                                        message={
+                                            convertForm.errors.mobile_phone
+                                        }
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="convert-mobile-ref">
+                                        Référence de transaction
+                                    </Label>
+                                    <Input
+                                        id="convert-mobile-ref"
+                                        value={
+                                            convertForm.data.mobile_reference
+                                        }
+                                        onChange={(e) =>
+                                            convertForm.setData(
+                                                'mobile_reference',
+                                                e.target.value,
+                                            )
+                                        }
+                                        placeholder="Optionnel"
+                                    />
+                                    <InputError
+                                        message={
+                                            convertForm.errors.mobile_reference
+                                        }
+                                    />
+                                </div>
+                            </div>
+                        )}
                         <DialogFooter>
                             <Button
                                 type="button"

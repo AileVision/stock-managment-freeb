@@ -51,6 +51,8 @@
     @php
         $discountPercent = (float) $sale->discount_percent;
         $discountAmount = $discountPercent > 0 ? (float) $sale->total * $discountPercent / (100 - $discountPercent) : 0.0;
+        $taxPercent = (float) $sale->tax_percent;
+        $taxAmount = $taxPercent > 0 ? $sale->taxAmount() : 0.0;
     @endphp
 
     @if ($discountPercent > 0)
@@ -58,6 +60,14 @@
             <span class="name">Remise ({{ number_format($discountPercent, 0, ',', ' ') }}%)</span>
             <span class="qty"></span>
             <span class="amount">−{{ $money($discountAmount) }}</span>
+        </div>
+    @endif
+
+    @if ($taxPercent > 0)
+        <div class="line">
+            <span class="name">TVA ({{ number_format($taxPercent, 0, ',', ' ') }}%)</span>
+            <span class="qty"></span>
+            <span class="amount">{{ $money($taxAmount) }}</span>
         </div>
     @endif
 
@@ -72,6 +82,13 @@
     <div class="divider"></div>
 
     <p class="row"><strong>Paiement :</strong> {{ \App\Models\Sale::PAYMENT_METHODS[$sale->payment_method] ?? $sale->payment_method }}</p>
+
+    @if ($sale->mobile_phone)
+        <p class="row"><strong>Mobile :</strong> {{ $sale->mobile_phone }}</p>
+        @if ($sale->mobile_reference)
+            <p class="row muted">Réf. {{ $sale->mobile_reference }}</p>
+        @endif
+    @endif
 
     @if ($sale->notes)
         <p class="muted">{{ $sale->notes }}</p>

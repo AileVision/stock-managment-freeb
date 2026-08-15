@@ -20,17 +20,20 @@ use Illuminate\Support\Carbon;
  * @property string|null $customer_address
  * @property string $status
  * @property string $discount_percent
+ * @property string $tax_percent
+ * @property int|null $tax_rate_id
  * @property Carbon|null $valid_until
  * @property string|null $notes
  * @property int|null $sale_id
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Customer|null $customer
+ * @property-read TaxRate|null $taxRate
  * @property-read User|null $user
  * @property-read Collection<int, QuoteItem> $items
  * @property-read Sale|null $sale
  */
-#[Fillable(['reference', 'customer_id', 'user_id', 'customer_name', 'customer_email', 'customer_phone', 'customer_address', 'status', 'discount_percent', 'valid_until', 'notes', 'sale_id'])]
+#[Fillable(['reference', 'customer_id', 'user_id', 'customer_name', 'customer_email', 'customer_phone', 'customer_address', 'status', 'discount_percent', 'tax_rate_id', 'tax_percent', 'valid_until', 'notes', 'sale_id'])]
 class Quote extends Model
 {
     /**
@@ -43,6 +46,33 @@ class Quote extends Model
         return [
             'valid_until' => 'date',
         ];
+    }
+
+    /**
+     * The tax rate applied to the quote.
+     *
+     * @return BelongsTo<TaxRate, $this>
+     */
+    public function taxRate(): BelongsTo
+    {
+        return $this->belongsTo(TaxRate::class);
+    }
+
+    /**
+     * The tax amount included in the (tax-inclusive) total.
+     */
+    public function taxAmount(): float
+    {
+        $rate = (float) $this->tax_percent;
+
+        if ($rate <= 0) {
+            return 0.0;
+        }
+
+        $total = round((float) $this->items->sum(fn (QuoteItem $item): float => $item->quantity * (float) $item->unit_price), 2);
+        $total -= round($total * (float) $this->discount_percent / 100, 2);
+
+        return round($total - $total / (1 + $rate / 100), 2);
     }
 
     /**

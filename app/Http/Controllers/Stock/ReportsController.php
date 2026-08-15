@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Stock;
 use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\PurchaseOrder;
 use App\Models\Sale;
 use App\Models\StockMovement;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -108,6 +109,161 @@ class ReportsController extends Controller
     public function sales(Request $request): Response
     {
         return Inertia::render('stock/reports/sales', $this->salesData($request));
+    }
+
+    /**
+     * Show the financial report: revenue, VAT, purchases and margins.
+     */
+    public function financial(Request $request): Response
+    {
+        return Inertia::render('stock/reports/financial', $this->financialData($request));
+    }
+
+    /**
+     * Export the financial report as CSV.
+     */
+    public function financialExport(Request $request): StreamedResponse
+    {
+        $data = $this->financialData($request);
+
+        return $this->csvResponse('rapport-financier.csv', function ($write) use ($data): void {
+            $summary = $data['summary'];
+
+            $write(['Rapport financier']);
+            $write(['Période', $data['filters']['from'], '→', $data['filters']['to']]);
+            $write([]);
+            $write(['Chiffre d’affaires TTC', number_format((float) $summary['revenue'], 2, ',', ' ')]);
+            $write(['TVA collectée', number_format((float) $summary['vat_collected'], 2, ',', ' ')]);
+            $write(['Chiffre d’affaires HT', number_format((float) $summary['revenue_ht'], 2, ',', ' ')]);
+            $write(['Achats (réceptions)', number_format((float) $summary['purchases'], 2, ',', ' ')]);
+            $write(['Coût des ventes', number_format((float) $summary['cost_of_goods'], 2, ',', ' ')]);
+            $write(['Marge brute', number_format((float) $summary['gross_margin'], 2, ',', ' ')]);
+            $write([]);
+            $write(['TVA PAR TAUX']);
+            $write(['Taux', 'Base HT', 'TVA']);
+
+            foreach ($data['vat_by_rate'] as $row) {
+                $write([
+                    $row['name'],
+                    number_format((float) $row['base'], 2, ',', ' '),
+                    number_format((float) $row['vat'], 2, ',', ' '),
+                ]);
+            }
+
+            $write([]);
+            $write(['ACHATS SUR LA PÉRIODE']);
+            $write(['Référence', 'Fournisseur', 'Date', 'Montant HT estimé']);
+
+            foreach ($data['purchase_orders'] as $row) {
+                $write([
+                    $row['reference'],
+                    $row['supplier'],
+                    $row['date'],
+                    number_format((float) $row['amount'], 2, ',', ' '),
+                ]);
+            }
+        });
+    }
+
+    /**
+     * Compute the financial report data shared by the page and the export.
+     *
+     * @return array<string, mixed>
+     */
+    private function financialData(Request $request): array
+    {
+        $from = $request->date('from') ?? now()->startOfMonth();
+        $to = $request->date('to') ?? now()->endOfDay();
+
+        $salesQuery = Sale::query()
+            ->where('status', Sale::STATUS_COMPLETED)
+            ->whereDate('created_at', '>=', $from)
+            ->whereDate('created_at', '<=', $to);
+
+        $revenue = (float) (clone $salesQuery)->sum('total');
+        $salesCount = (clone $salesQuery)->count();
+
+        // TVA collectée : extraite du total TTC au taux enregistré sur la vente.
+        $vatCollected = (float) (clone $salesQuery)->get()->sum(fn (Sale $sale): float => $sale->taxAmount());
+
+        // Coût des ventes : quantité vendue × prix d'achat actuel du produit.
+        $costOfGoods = (float) DB::table('sale_items')
+            ->join('sales', 'sales.id', '=', 'sale_items.sale_id')
+            ->join('products', 'products.id', '=', 'sale_items.product_id')
+            ->where('sales.status', Sale::STATUS_COMPLETED)
+            ->whereDate('sales.created_at', '>=', $from)
+            ->whereDate('sales.created_at', '<=', $to)
+            ->sum(DB::raw('sale_items.quantity * products.purchase_price'));
+
+        // Achats : commandes réceptionnées (quantités reçues × prix d'achat).
+        $purchases = (float) DB::table('purchase_order_items')
+            ->join('purchase_orders', 'purchase_orders.id', '=', 'purchase_order_items.purchase_order_id')
+            ->join('products', 'products.id', '=', 'purchase_order_items.product_id')
+            ->whereIn('purchase_orders.status', [PurchaseOrder::STATUS_PARTIAL, PurchaseOrder::STATUS_RECEIVED])
+            ->whereDate('purchase_orders.created_at', '>=', $from)
+            ->whereDate('purchase_orders.created_at', '<=', $to)
+            ->sum(DB::raw('purchase_order_items.received_quantity * products.purchase_price'));
+
+        // TVA par taux : regroupe les ventes selon leur taux enregistré.
+        $vatByRate = (clone $salesQuery)->get()
+            ->groupBy('tax_percent')
+            ->map(function ($grouped, $rate): array {
+                $rate = (float) $rate;
+                $base = round((float) $grouped->sum('total') / (1 + $rate / 100), 2);
+
+                return [
+                    'name' => $rate > 0 ? "TVA {$rate} %" : 'TVA 0 %',
+                    'rate' => $rate,
+                    'base' => $base,
+                    'vat' => round((float) $grouped->sum(fn (Sale $sale): float => $sale->taxAmount()), 2),
+                ];
+            })
+            ->values()
+            ->sortByDesc('vat')
+            ->values();
+
+        $purchaseOrders = PurchaseOrder::query()
+            ->with(['supplier:id,name', 'items.product:id,purchase_price'])
+            ->whereIn('status', [PurchaseOrder::STATUS_PARTIAL, PurchaseOrder::STATUS_RECEIVED])
+            ->whereDate('created_at', '>=', $from)
+            ->whereDate('created_at', '<=', $to)
+            ->latest()
+            ->limit(25)
+            ->get()
+            ->map(function (PurchaseOrder $order): array {
+                $amount = round((float) $order->items->sum(
+                    fn ($item): float => $item->received_quantity * (float) $item->product->purchase_price,
+                ), 2);
+
+                return [
+                    'reference' => $order->reference,
+                    'supplier' => $order->supplier->name ?? '—',
+                    'date' => $order->created_at?->toDateString(),
+                    'amount' => $amount,
+                ];
+            });
+
+        $revenueHt = round($revenue - $vatCollected, 2);
+        $grossMargin = round($revenueHt - $costOfGoods, 2);
+
+        return [
+            'summary' => [
+                'revenue' => round($revenue, 2),
+                'revenue_ht' => $revenueHt,
+                'vat_collected' => round($vatCollected, 2),
+                'sales_count' => $salesCount,
+                'purchases' => $purchases,
+                'cost_of_goods' => round($costOfGoods, 2),
+                'gross_margin' => $grossMargin,
+                'margin_rate' => $revenueHt > 0 ? round($grossMargin / $revenueHt * 100, 1) : 0,
+            ],
+            'vat_by_rate' => $vatByRate,
+            'purchase_orders' => $purchaseOrders,
+            'filters' => [
+                'from' => $from->toDateString(),
+                'to' => $to->toDateString(),
+            ],
+        ];
     }
 
     /**

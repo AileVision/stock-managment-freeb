@@ -19,27 +19,76 @@ use Illuminate\Support\Carbon;
  * @property string $payment_method
  * @property string $total
  * @property string $discount_percent
+ * @property string $tax_percent
+ * @property int|null $tax_rate_id
+ * @property string|null $mobile_phone
+ * @property string|null $mobile_reference
  * @property string $status
  * @property string|null $notes
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read CashSession|null $session
  * @property-read Warehouse|null $warehouse
+ * @property-read TaxRate|null $taxRate
  * @property-read User|null $user
  * @property-read Collection<int, SaleItem> $items
  * @property-read Invoice|null $invoice
  */
-#[Fillable(['reference', 'session_id', 'warehouse_id', 'user_id', 'payment_method', 'total', 'discount_percent', 'status', 'notes'])]
+#[Fillable(['reference', 'session_id', 'warehouse_id', 'user_id', 'payment_method', 'total', 'discount_percent', 'tax_rate_id', 'tax_percent', 'mobile_phone', 'mobile_reference', 'status', 'notes'])]
 class Sale extends Model
 {
     /**
-     * Available payment methods, keyed by stored value.
+     * Available payment methods, keyed by stored value. Includes the Togolese
+     * mobile money providers T-Money and Flooz.
      */
     public const PAYMENT_METHODS = [
         'cash' => 'Espèces',
         'card' => 'Carte bancaire',
         'transfer' => 'Virement',
+        'tmoney' => 'T-Money',
+        'flooz' => 'Flooz',
     ];
+
+    /**
+     * The payment methods that require a mobile phone number.
+     *
+     * @var array<int, string>
+     */
+    public const MOBILE_PAYMENT_METHODS = ['tmoney', 'flooz'];
+
+    /**
+     * The tax rate applied to the sale.
+     *
+     * @return BelongsTo<TaxRate, $this>
+     */
+    public function taxRate(): BelongsTo
+    {
+        return $this->belongsTo(TaxRate::class);
+    }
+
+    /**
+     * The tax amount included in the (tax-inclusive) total.
+     */
+    public function taxAmount(): float
+    {
+        $rate = (float) $this->tax_percent;
+
+        if ($rate <= 0) {
+            return 0.0;
+        }
+
+        $total = (float) $this->total;
+
+        return round($total - $total / (1 + $rate / 100), 2);
+    }
+
+    /**
+     * Whether the sale was paid by mobile money.
+     */
+    public function isMobilePayment(): bool
+    {
+        return in_array($this->payment_method, self::MOBILE_PAYMENT_METHODS, true);
+    }
 
     /**
      * Whether the sale has been cancelled (stock restored).

@@ -100,6 +100,8 @@
                 $discountAmount = $discountPercent > 0 && $sale !== null
                     ? (float) $sale->total * $discountPercent / (100 - $discountPercent)
                     : 0.0;
+                $taxPercent = (float) ($sale?->tax_percent ?? 0);
+                $taxAmount = $taxPercent > 0 && $sale !== null ? $sale->taxAmount() : 0.0;
             @endphp
             @if ($discountPercent > 0)
                 <tr>
@@ -107,8 +109,14 @@
                     <td class="num">− {{ $money($discountAmount) }}</td>
                 </tr>
             @endif
+            @if ($taxPercent > 0)
+                <tr>
+                    <td colspan="3" class="right">TVA ({{ number_format($taxPercent, 0, ',', ' ') }}%)</td>
+                    <td class="num">{{ $money($taxAmount) }}</td>
+                </tr>
+            @endif
             <tr class="total-row">
-                <td colspan="3" class="right">TOTAL</td>
+                <td colspan="3" class="right">TOTAL TTC</td>
                 <td class="num">{{ $money((float) ($sale?->total ?? 0)) }}</td>
             </tr>
         </tbody>
@@ -118,6 +126,13 @@
         <p class="block" style="margin-top: 12px;">
             <span class="label">Mode de paiement</span><br>
             <strong>{{ \App\Models\Sale::PAYMENT_METHODS[$sale->payment_method] ?? $sale->payment_method }}</strong>
+            @if ($sale->mobile_phone)
+                <br><span class="muted">{{ $sale->mobile_phone }}
+                @if ($sale->mobile_reference)
+                    · Réf. {{ $sale->mobile_reference }}
+                @endif
+                </span>
+            @endif
         </p>
     @endif
 

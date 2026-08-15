@@ -8,9 +8,11 @@ import {
     FileCheck2,
     FileText,
     HardDriveDownload,
+    Landmark,
     LayoutGrid,
     Package,
     PackagePlus,
+    Percent,
     ShieldCheck,
     ShoppingCart,
     Store,
@@ -170,6 +172,20 @@ export function AppSidebar() {
                       title: 'Rapport de ventes',
                       href: stock.reports.sales(),
                       icon: TrendingUp,
+                  },
+                  {
+                      title: 'Rapport financier',
+                      href: stock.reports.financial(),
+                      icon: Landmark,
+                  },
+              ]
+            : []),
+        ...(permissions.includes('taxes.view')
+            ? [
+                  {
+                      title: 'TVA',
+                      href: stock.taxes.index(),
+                      icon: Percent,
                   },
               ]
             : []),

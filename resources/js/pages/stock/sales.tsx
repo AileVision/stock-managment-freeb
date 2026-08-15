@@ -178,12 +178,47 @@ function SaleDetail({
                                             </TableCell>
                                         </TableRow>
                                     ))}
+                                    {sale.discount_percent > 0 && (
+                                        <TableRow>
+                                            <TableCell
+                                                colSpan={3}
+                                                className="text-muted-foreground"
+                                            >
+                                                Remise ({sale.discount_percent}
+                                                %)
+                                            </TableCell>
+                                            <TableCell className="text-right font-medium text-red-600 tabular-nums dark:text-red-400">
+                                                −{' '}
+                                                {formatCurrency(
+                                                    (sale.total *
+                                                        sale.discount_percent) /
+                                                        (100 -
+                                                            sale.discount_percent),
+                                                )}
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                    {sale.tax_percent > 0 && (
+                                        <TableRow>
+                                            <TableCell
+                                                colSpan={3}
+                                                className="text-muted-foreground"
+                                            >
+                                                TVA ({sale.tax_percent}%)
+                                            </TableCell>
+                                            <TableCell className="text-right font-medium tabular-nums">
+                                                {formatCurrency(
+                                                    sale.tax_amount,
+                                                )}
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
                                     <TableRow>
                                         <TableCell
                                             colSpan={3}
                                             className="font-semibold"
                                         >
-                                            Total
+                                            Total TTC
                                         </TableCell>
                                         <TableCell className="text-right font-semibold tabular-nums">
                                             {formatCurrency(sale.total)}
@@ -192,6 +227,21 @@ function SaleDetail({
                                 </TableBody>
                             </Table>
                         </div>
+
+                        {sale.mobile_phone && (
+                            <p className="text-sm">
+                                Paiement mobile :{' '}
+                                <span className="font-medium">
+                                    {sale.mobile_phone}
+                                </span>
+                                {sale.mobile_reference && (
+                                    <span className="text-muted-foreground">
+                                        {' '}
+                                        · Réf. {sale.mobile_reference}
+                                    </span>
+                                )}
+                            </p>
+                        )}
 
                         {sale.notes && (
                             <p className="text-sm text-muted-foreground">
@@ -428,7 +478,19 @@ export default function Sales({ sales, filters }: Props) {
                                     <TableCell className="text-right font-medium tabular-nums">
                                         {formatCurrency(sale.total)}
                                     </TableCell>
-                                    <TableCell>{sale.payment_label}</TableCell>
+                                    <TableCell>
+                                        {sale.payment_label}
+                                        {sale.mobile_phone && (
+                                            <div className="text-xs text-muted-foreground">
+                                                {sale.mobile_phone}
+                                            </div>
+                                        )}
+                                        {sale.tax_percent > 0 && (
+                                            <div className="text-xs text-muted-foreground">
+                                                TVA {sale.tax_percent}%
+                                            </div>
+                                        )}
+                                    </TableCell>
                                     <TableCell>
                                         <Badge
                                             variant="outline"

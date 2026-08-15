@@ -102,7 +102,22 @@ export type MovementReport = {
     out_quantity: number;
 };
 
-export type PaymentMethod = 'cash' | 'card' | 'transfer';
+export type PaymentMethod =
+    | 'cash'
+    | 'card'
+    | 'transfer'
+    | 'tmoney'
+    | 'flooz';
+
+export type TaxRate = {
+    id: number;
+    name: string;
+    rate: number;
+    is_default: boolean;
+    is_active: boolean;
+};
+
+export type TaxRateOption = Pick<TaxRate, 'id' | 'name' | 'rate' | 'is_default'>;
 
 export type SaleStatus = 'completed' | 'cancelled';
 
@@ -121,6 +136,10 @@ export type Sale = {
     payment_label: string;
     total: number;
     discount_percent: number;
+    tax_percent: number;
+    tax_amount: number;
+    mobile_phone: string | null;
+    mobile_reference: string | null;
     status: SaleStatus;
     notes: string | null;
     created_at: string;
@@ -167,6 +186,9 @@ export type Quote = {
     subtotal: number;
     discount_percent: number;
     discount_amount: number;
+    tax_rate_id: number | null;
+    tax_percent: number;
+    tax_amount: number;
     total: number;
     created_at: string;
     user: { id: number; name: string } | null;
@@ -231,6 +253,31 @@ export type UninvoicedSale = Pick<
     Sale,
     'id' | 'reference' | 'total' | 'created_at' | 'payment_method'
 >;
+
+export type FinancialSummary = {
+    revenue: number;
+    revenue_ht: number;
+    vat_collected: number;
+    sales_count: number;
+    purchases: number;
+    cost_of_goods: number;
+    gross_margin: number;
+    margin_rate: number;
+};
+
+export type VatByRate = {
+    name: string;
+    rate: number;
+    base: number;
+    vat: number;
+};
+
+export type FinancialPurchase = {
+    reference: string | null;
+    supplier: string;
+    date: string | null;
+    amount: number;
+};
 
 export type CashSession = {
     id: number;

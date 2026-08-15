@@ -38,6 +38,7 @@ import {
     formatCurrency,
     formatDate,
     formatDateOnly,
+    isMobilePayment,
     PAYMENT_METHOD_LABELS,
 } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -48,6 +49,7 @@ import type {
     PaymentMethod,
     PosProduct,
     Sale,
+    TaxRateOption,
     Warehouse,
 } from '@/types';
 
@@ -55,6 +57,7 @@ type Props = {
     products: PosProduct[];
     open_session: CashSession | null;
     warehouses: Pick<Warehouse, 'id' | 'name' | 'code' | 'is_default'>[];
+    tax_rates: TaxRateOption[];
 };
 
 type CartItem = {
@@ -335,7 +338,12 @@ function SessionPanel({
     );
 }
 
-export default function Pos({ products, open_session, warehouses }: Props) {
+export default function Pos({
+    products,
+    open_session,
+    warehouses,
+    tax_rates,
+}: Props) {
     const { permissions } = usePage<{ auth: Auth }>().props.auth;
     const canCreate = permissions.includes('sales.create');
     const canOpenSession = permissions.includes('sessions.open');
@@ -347,6 +355,9 @@ export default function Pos({ products, open_session, warehouses }: Props) {
         warehouses.find((warehouse) => warehouse.is_default) ??
         warehouses[0] ??
         null;
+
+    const defaultTaxRate =
+        tax_rates.find((taxRate) => taxRate.is_default) ?? tax_rates[0] ?? null;
 
     const [warehouseId, setWarehouseId] = useState<number | null>(
         defaultWarehouse?.id ?? null,
@@ -368,13 +379,19 @@ export default function Pos({ products, open_session, warehouses }: Props) {
         payment_method: PaymentMethod;
         session_id: number | null;
         warehouse_id: number | null;
+        tax_rate_id: number | null;
         discount_percent: string;
+        mobile_phone: string;
+        mobile_reference: string;
     }>({
         items: [],
         payment_method: 'cash',
         session_id: open_session?.id ?? null,
         warehouse_id: defaultWarehouse?.id ?? null,
+        tax_rate_id: defaultTaxRate?.id ?? null,
         discount_percent: '0',
+        mobile_phone: '',
+        mobile_reference: '',
     });
 
     const dismissReceipt = () => {
@@ -451,6 +468,17 @@ export default function Pos({ products, open_session, warehouses }: Props) {
     const discountAmount = (subtotal * discountPercent) / 100;
     const total = subtotal - discountAmount;
 
+    const selectedTaxRate =
+        tax_rates.find((taxRate) => taxRate.id === form.data.tax_rate_id) ??
+        defaultTaxRate;
+    const taxPercent = selectedTaxRate?.rate ?? 0;
+    // TVA incluse : on extrait la taxe du total toutes taxes comprises.
+    const taxAmount =
+        taxPercent > 0
+            ? Math.round((total - total / (1 + taxPercent / 100)) * 100) / 100
+            : 0;
+    const mobilePayment = isMobilePayment(form.data.payment_method);
+
     const filteredProducts = useMemo(() => {
         const query = search.trim().toLowerCase();
 
@@ -508,7 +536,10 @@ export default function Pos({ products, open_session, warehouses }: Props) {
             })),
             session_id: open_session?.id ?? null,
             warehouse_id: warehouseId,
+            tax_rate_id: form.data.tax_rate_id,
             discount_percent: form.data.discount_percent,
+            mobile_phone: form.data.mobile_phone,
+            mobile_reference: form.data.mobile_reference,
         });
 
         form.post(stock.sales.store().url, {
@@ -838,6 +869,17 @@ export default function Pos({ products, open_session, warehouses }: Props) {
                                         </span>
                                     </div>
                                 )}
+                                {taxPercent > 0 && (
+                                    <div className="flex items-center justify-between text-sm">
+                                        <span className="text-muted-foreground">
+                                            TVA ({selectedTaxRate?.name} ·{' '}
+                                            {taxPercent}%)
+                                        </span>
+                                        <span className="tabular-nums">
+                                            {formatCurrency(taxAmount)}
+                                        </span>
+                                    </div>
+                                )}
                                 <div className="flex items-center justify-between text-sm">
                                     <span className="text-muted-foreground">
                                         Total à payer
@@ -846,6 +888,56 @@ export default function Pos({ products, open_session, warehouses }: Props) {
                                         {formatCurrency(total)}
                                     </span>
                                 </div>
+                                {taxPercent > 0 && (
+                                    <p className="text-xs text-muted-foreground">
+                                        Montant TTC, dont{' '}
+                                        {formatCurrency(taxAmount)} de TVA
+                                        incluse.
+                                    </p>
+                                )}
+
+                                {tax_rates.length > 0 && (
+                                    <div className="space-y-2">
+                                        <Label htmlFor="tax_rate_id">TVA</Label>
+                                        <Select
+                                            value={
+                                                form.data.tax_rate_id !== null
+                                                    ? String(
+                                                          form.data.tax_rate_id,
+                                                      )
+                                                    : 'none'
+                                            }
+                                            onValueChange={(v) =>
+                                                form.setData(
+                                                    'tax_rate_id',
+                                                    v === 'none'
+                                                        ? null
+                                                        : Number(v),
+                                                )
+                                            }
+                                        >
+                                            <SelectTrigger className="w-full">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="none">
+                                                    Sans TVA
+                                                </SelectItem>
+                                                {tax_rates.map((taxRate) => (
+                                                    <SelectItem
+                                                        key={taxRate.id}
+                                                        value={String(
+                                                            taxRate.id,
+                                                        )}
+                                                    >
+                                                        {taxRate.name} (
+                                                        {taxRate.rate}%)
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                )}
 
                                 <div className="space-y-2">
                                     <Label>Mode de paiement</Label>
@@ -878,6 +970,62 @@ export default function Pos({ products, open_session, warehouses }: Props) {
                                     </Select>
                                     <InputError message={form.errors.items} />
                                 </div>
+
+                                {mobilePayment && (
+                                    <div className="space-y-2 rounded-xl border bg-muted/30 p-3">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="mobile_phone">
+                                                Numéro{' '}
+                                                {form.data.payment_method ===
+                                                'tmoney'
+                                                    ? 'T-Money'
+                                                    : 'Flooz'}{' '}
+                                                du client
+                                            </Label>
+                                            <Input
+                                                id="mobile_phone"
+                                                type="tel"
+                                                value={form.data.mobile_phone}
+                                                onChange={(e) =>
+                                                    form.setData(
+                                                        'mobile_phone',
+                                                        e.target.value,
+                                                    )
+                                                }
+                                                placeholder="+228 90 00 00 00"
+                                                required
+                                            />
+                                            <InputError
+                                                message={
+                                                    form.errors.mobile_phone
+                                                }
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="mobile_reference">
+                                                Référence de transaction
+                                            </Label>
+                                            <Input
+                                                id="mobile_reference"
+                                                value={
+                                                    form.data.mobile_reference
+                                                }
+                                                onChange={(e) =>
+                                                    form.setData(
+                                                        'mobile_reference',
+                                                        e.target.value,
+                                                    )
+                                                }
+                                                placeholder="Optionnel"
+                                            />
+                                            <InputError
+                                                message={
+                                                    form.errors.mobile_reference
+                                                }
+                                            />
+                                        </div>
+                                    </div>
+                                )}
 
                                 {canCreate && (
                                     <Button
@@ -941,6 +1089,26 @@ export default function Pos({ products, open_session, warehouses }: Props) {
                                         </div>
                                     ))}
                                 </div>
+                                {sale.tax_percent > 0 && (
+                                    <div className="flex items-center justify-between border-t border-dashed pt-3 text-sm">
+                                        <span className="text-muted-foreground">
+                                            TVA ({sale.tax_percent}%)
+                                        </span>
+                                        <span className="tabular-nums">
+                                            {formatCurrency(sale.tax_amount)}
+                                        </span>
+                                    </div>
+                                )}
+                                {sale.mobile_phone && (
+                                    <div className="flex items-center justify-between border-t border-dashed pt-3 text-sm">
+                                        <span className="text-muted-foreground">
+                                            Paiement mobile
+                                        </span>
+                                        <span className="tabular-nums">
+                                            {sale.mobile_phone}
+                                        </span>
+                                    </div>
+                                )}
                                 <div className="flex items-center justify-between border-t border-dashed pt-3 text-sm font-semibold">
                                     <span>Total</span>
                                     <span className="tabular-nums">
