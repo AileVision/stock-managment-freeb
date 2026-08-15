@@ -12,12 +12,13 @@ use Illuminate\Support\Carbon;
  * @property int $purchase_order_id
  * @property int $product_id
  * @property int $quantity
+ * @property int $received_quantity
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read PurchaseOrder $purchaseOrder
  * @property-read Product $product
  */
-#[Fillable(['purchase_order_id', 'product_id', 'quantity'])]
+#[Fillable(['purchase_order_id', 'product_id', 'quantity', 'received_quantity'])]
 class PurchaseOrderItem extends Model
 {
     /**
@@ -38,5 +39,13 @@ class PurchaseOrderItem extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    /**
+     * The quantity still missing (ordered minus already received).
+     */
+    public function remaining(): int
+    {
+        return max((int) $this->quantity - (int) $this->received_quantity, 0);
     }
 }

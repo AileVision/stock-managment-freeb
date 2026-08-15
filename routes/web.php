@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\BackupController;
 use App\Http\Controllers\Admin\RolesController;
 use App\Http\Controllers\Admin\UsersController;
 use App\Http\Controllers\Stock\CashSessionController;
@@ -8,12 +9,15 @@ use App\Http\Controllers\Stock\CustomerController;
 use App\Http\Controllers\Stock\DashboardController;
 use App\Http\Controllers\Stock\InvoiceController;
 use App\Http\Controllers\Stock\ProductController;
+use App\Http\Controllers\Stock\PurchaseOrderController;
 use App\Http\Controllers\Stock\QuoteController;
 use App\Http\Controllers\Stock\ReplenishmentController;
 use App\Http\Controllers\Stock\ReportsController;
 use App\Http\Controllers\Stock\SalesController;
 use App\Http\Controllers\Stock\StockMovementController;
 use App\Http\Controllers\Stock\SupplierController;
+use App\Http\Controllers\Stock\TransferController;
+use App\Http\Controllers\Stock\WarehouseController;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'welcome')->name('home');
@@ -83,6 +87,45 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->middleware('can:movements.create')
             ->name('stock.movements.store');
 
+        Route::get('warehouses', [WarehouseController::class, 'index'])
+            ->middleware('can:warehouses.view')
+            ->name('stock.warehouses.index');
+        Route::post('warehouses', [WarehouseController::class, 'store'])
+            ->middleware('can:warehouses.manage')
+            ->name('stock.warehouses.store');
+        Route::patch('warehouses/{warehouse}', [WarehouseController::class, 'update'])
+            ->middleware('can:warehouses.manage')
+            ->name('stock.warehouses.update');
+        Route::patch('warehouses/{warehouse}/default', [WarehouseController::class, 'setDefault'])
+            ->middleware('can:warehouses.manage')
+            ->name('stock.warehouses.set-default');
+        Route::delete('warehouses/{warehouse}', [WarehouseController::class, 'destroy'])
+            ->middleware('can:warehouses.manage')
+            ->name('stock.warehouses.destroy');
+
+        Route::get('transfers', [TransferController::class, 'index'])
+            ->middleware('can:transfers.view')
+            ->name('stock.transfers.index');
+        Route::post('transfers', [TransferController::class, 'store'])
+            ->middleware('can:transfers.create')
+            ->name('stock.transfers.store');
+
+        Route::get('purchase-orders', [PurchaseOrderController::class, 'index'])
+            ->middleware('can:purchase_orders.view')
+            ->name('stock.purchase-orders.index');
+        Route::post('purchase-orders', [PurchaseOrderController::class, 'store'])
+            ->middleware('can:purchase_orders.create')
+            ->name('stock.purchase-orders.store');
+        Route::post('purchase-orders/{purchaseOrder}/order', [PurchaseOrderController::class, 'order'])
+            ->middleware('can:purchase_orders.update')
+            ->name('stock.purchase-orders.order');
+        Route::post('purchase-orders/{purchaseOrder}/receive', [PurchaseOrderController::class, 'receive'])
+            ->middleware('can:purchase_orders.receive')
+            ->name('stock.purchase-orders.receive');
+        Route::delete('purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'destroy'])
+            ->middleware('can:purchase_orders.delete')
+            ->name('stock.purchase-orders.destroy');
+
         Route::get('sales', [SalesController::class, 'index'])
             ->middleware('can:sales.view')
             ->name('stock.sales.index');
@@ -137,6 +180,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('invoices/{invoice}/pdf', [InvoiceController::class, 'pdf'])
             ->middleware('can:invoices.view')
             ->name('stock.invoices.pdf');
+        Route::get('invoices/export-pdf', [InvoiceController::class, 'exportPdf'])
+            ->middleware('can:invoices.view')
+            ->name('stock.invoices.export-pdf');
 
         Route::get('replenishment', [ReplenishmentController::class, 'index'])
             ->middleware('can:replenishment.view')
@@ -157,6 +203,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('reports/sales', [ReportsController::class, 'sales'])
             ->middleware('can:reports.view')
             ->name('stock.reports.sales');
+        Route::get('reports/sales/export', [ReportsController::class, 'salesExport'])
+            ->middleware('can:reports.export')
+            ->name('stock.reports.sales.export');
+        Route::get('reports/sales/pdf', [ReportsController::class, 'salesPdf'])
+            ->middleware('can:reports.view')
+            ->name('stock.reports.sales.pdf');
     });
 
     Route::prefix('admin')->group(function () {
@@ -179,6 +231,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::patch('roles/{role}', [RolesController::class, 'update'])
             ->middleware('can:roles.manage')
             ->name('roles.update');
+
+        Route::get('backups', [BackupController::class, 'index'])
+            ->middleware('can:backups.manage')
+            ->name('backups.index');
+        Route::post('backups', [BackupController::class, 'store'])
+            ->middleware('can:backups.manage')
+            ->name('backups.store');
+        Route::get('backups/{backup}/download', [BackupController::class, 'download'])
+            ->middleware('can:backups.manage')
+            ->name('backups.download');
+        Route::post('backups/{backup}/restore', [BackupController::class, 'restore'])
+            ->middleware('can:backups.manage')
+            ->name('backups.restore');
+        Route::delete('backups/{backup}', [BackupController::class, 'destroy'])
+            ->middleware('can:backups.manage')
+            ->name('backups.destroy');
     });
 });
 

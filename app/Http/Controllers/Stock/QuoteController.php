@@ -11,6 +11,7 @@ use App\Models\Product;
 use App\Models\Quote;
 use App\Models\QuoteItem;
 use App\Models\Sale;
+use App\Models\Warehouse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -175,7 +176,9 @@ class QuoteController extends Controller
 
         $validated = $request->validated();
 
-        $sale = DB::transaction(function () use ($validated, $quote, $request): Sale {
+        $warehouseId = (int) (Warehouse::defaultId() ?? 0);
+
+        $sale = DB::transaction(function () use ($validated, $quote, $request, $warehouseId): Sale {
             $items = $quote->items()->get()->mapWithKeys(
                 fn (QuoteItem $item): array => [(int) $item->product_id => $item],
             )->filter(fn (QuoteItem $item): bool => $item->product_id !== null);
@@ -216,7 +219,12 @@ class QuoteController extends Controller
 
             foreach ($items as $productId => $item) {
                 $product = $products->get($productId);
-                $product->decrement('stock_quantity', $item->quantity);
+
+                if ($warehouseId > 0) {
+                    $product->adjustStock($warehouseId, -$item->quantity);
+                } else {
+                    $product->decrement('stock_quantity', $item->quantity);
+                }
 
                 $sale->items()->create([
                     'product_id' => $productId,
@@ -229,6 +237,7 @@ class QuoteController extends Controller
                     'quantity' => -$item->quantity,
                     'reason' => "Vente issue du devis {$quote->reference}",
                     'reference' => $sale->reference,
+                    'warehouse_id' => $warehouseId > 0 ? $warehouseId : null,
                     'user_id' => $request->user()->id,
                 ]);
             }

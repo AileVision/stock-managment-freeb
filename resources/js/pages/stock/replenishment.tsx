@@ -38,12 +38,14 @@ import type {
     PurchaseOrder,
     ReplenishmentProduct,
     Supplier,
+    Warehouse,
 } from '@/types';
 
 type Props = {
     products: ReplenishmentProduct[];
     purchase_orders: PurchaseOrder[];
     suppliers: Pick<Supplier, 'id' | 'name'>[];
+    warehouses: Pick<Warehouse, 'id' | 'name' | 'code' | 'is_default'>[];
 };
 
 type ItemInput = {
@@ -55,6 +57,7 @@ export default function Replenishment({
     products,
     purchase_orders,
     suppliers,
+    warehouses,
 }: Props) {
     const { permissions } = usePage<{ auth: Auth }>().props.auth;
     const canCreate = permissions.includes('replenishment.create');
@@ -69,13 +72,20 @@ export default function Replenishment({
     );
     const [dialogOpen, setDialogOpen] = useState(false);
 
+    const defaultWarehouse =
+        warehouses.find((warehouse) => warehouse.is_default) ??
+        warehouses[0] ??
+        null;
+
     const form = useForm<{
         supplier_id: string;
         reference: string;
+        warehouse_id: string;
         items: ItemInput[];
     }>({
         supplier_id: '',
         reference: '',
+        warehouse_id: defaultWarehouse ? String(defaultWarehouse.id) : '',
         items: [],
     });
 
@@ -374,7 +384,7 @@ export default function Replenishment({
                         </DialogDescription>
                     </DialogHeader>
                     <form onSubmit={submit} className="grid gap-4">
-                        <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="grid gap-4 sm:grid-cols-3">
                             <div className="space-y-2">
                                 <Label>Fournisseur</Label>
                                 <Select
@@ -401,6 +411,36 @@ export default function Replenishment({
                                     </SelectContent>
                                 </Select>
                                 <InputError message={form.errors.supplier_id} />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Entrepôt de réception</Label>
+                                <Select
+                                    value={form.data.warehouse_id}
+                                    onValueChange={(v) =>
+                                        form.setData('warehouse_id', v)
+                                    }
+                                >
+                                    <SelectTrigger className="w-full">
+                                        <SelectValue placeholder="Défaut" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="none">
+                                            — Défaut —
+                                        </SelectItem>
+                                        {warehouses.map((warehouse) => (
+                                            <SelectItem
+                                                key={warehouse.id}
+                                                value={String(warehouse.id)}
+                                            >
+                                                {warehouse.name} (
+                                                {warehouse.code})
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <InputError
+                                    message={form.errors.warehouse_id}
+                                />
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="reference">

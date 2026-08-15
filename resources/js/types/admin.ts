@@ -18,3 +18,10 @@ export type AdminUser = {
     roles: string[];
     is_superadmin: boolean;
 };
+
+export type Backup = {
+    name: string;
+    size: number;
+    human_size: string;
+    created_at: string | null;
+};

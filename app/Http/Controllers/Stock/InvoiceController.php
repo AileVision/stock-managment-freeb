@@ -95,6 +95,31 @@ class InvoiceController extends Controller
     }
 
     /**
+     * Stream a single PDF containing all the filtered invoices.
+     */
+    public function exportPdf(Request $request): SymfonyResponse
+    {
+        $invoices = Invoice::query()
+            ->with(['sale.items.product:id,name,sku,unit'])
+            ->when($request->date('from'), fn ($query, $from) => $query->whereDate('issued_at', '>=', $from))
+            ->when($request->date('to'), fn ($query, $to) => $query->whereDate('issued_at', '<=', $to))
+            ->when($request->filled('search'), function ($query) use ($request) {
+                $search = trim((string) $request->string('search'));
+
+                $query->where(function ($query) use ($search) {
+                    $query->where('reference', 'like', "%{$search}%")
+                        ->orWhere('customer_name', 'like', "%{$search}%");
+                });
+            })
+            ->latest()
+            ->get();
+
+        return Pdf::loadView('pdf.invoices', ['invoices' => $invoices])
+            ->setPaper('a4', 'portrait')
+            ->stream('factures.pdf');
+    }
+
+    /**
      * Build a human-readable representation of an invoice for Inertia.
      *
      * @return array<string, mixed>

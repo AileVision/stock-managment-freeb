@@ -4,8 +4,10 @@ namespace Database\Seeders;
 
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\ProductWarehouse;
 use App\Models\Supplier;
 use App\Models\User;
+use App\Models\Warehouse;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
 
@@ -50,8 +52,21 @@ class DemoInventorySeeder extends Seeder
             ['name' => 'Stylo à bille (paquet de 10)', 'sku' => 'STY-001', 'unit' => 'pack', 'purchase_price' => 1500, 'sale_price' => 2000, 'stock_quantity' => 45, 'min_stock' => 15, 'category_id' => $category('Papeterie'), 'supplier_id' => $supplier('ElectroTech Import')],
         ];
 
+        // Rattache le stock de démo à l'entrepôt par défaut (le seeder tourne
+        // avec WithoutModelEvents, donc le hook de création de Product est
+        // silencieux et le rattachement doit être fait explicitement).
+        $defaultWarehouseId = Warehouse::defaultId();
+
         foreach ($products as $product) {
-            Product::create($product);
+            $product = Product::create($product);
+
+            if ($defaultWarehouseId !== null && $product->stock_quantity > 0) {
+                ProductWarehouse::create([
+                    'product_id' => $product->id,
+                    'warehouse_id' => $defaultWarehouseId,
+                    'quantity' => $product->stock_quantity,
+                ]);
+            }
         }
 
         $admin = User::where('email', 'admin@example.com')->first();

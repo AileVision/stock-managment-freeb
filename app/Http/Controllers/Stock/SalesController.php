@@ -8,6 +8,7 @@ use App\Models\CashSession;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\SaleItem;
+use App\Models\Warehouse;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -52,8 +53,22 @@ class SalesController extends Controller
     public function pos(): Response
     {
         $products = Product::query()
+            ->with('productWarehouses:product_id,warehouse_id,quantity')
             ->orderBy('name')
-            ->get(['id', 'name', 'sku', 'barcode', 'unit', 'sale_price', 'stock_quantity']);
+            ->get(['id', 'name', 'sku', 'barcode', 'unit', 'sale_price', 'stock_quantity'])
+            ->map(fn (Product $product): array => [
+                'id' => $product->id,
+                'name' => $product->name,
+                'sku' => $product->sku,
+                'barcode' => $product->barcode,
+                'unit' => $product->unit,
+                'sale_price' => $product->sale_price,
+                'stock_quantity' => $product->stock_quantity,
+                'stock_by_warehouse' => $product->productWarehouses
+                    ->pluck('quantity', 'warehouse_id')
+                    ->map(fn ($quantity) => (int) $quantity)
+                    ->all(),
+            ]);
 
         $openSession = CashSession::query()
             ->where('user_id', auth()->id())
@@ -70,6 +85,7 @@ class SalesController extends Controller
             'open_session' => $openSession !== null
                 ? $this->presentSession($openSession)
                 : null,
+            'warehouses' => Warehouse::query()->orderBy('name')->get(['id', 'name', 'code', 'is_default']),
         ]);
     }
 
@@ -88,23 +104,27 @@ class SalesController extends Controller
             fn (array $item): array => [(int) $item['product_id'] => (int) $item['quantity']],
         );
 
-        $sale = DB::transaction(function () use ($items, $validated, $request): Sale {
+        $warehouseId = (int) ($validated['warehouse_id'] ?? Warehouse::defaultId() ?? 0);
+
+        $sale = DB::transaction(function () use ($items, $validated, $request, $warehouseId): Sale {
             $products = Product::query()
                 ->whereKey($items->keys())
                 ->lockForUpdate()
                 ->get()
                 ->keyBy('id');
 
-            // Vérifie la disponibilité du stock avant toute écriture.
+            // Vérifie la disponibilité du stock dans l'entrepôt avant toute écriture.
             foreach ($items as $productId => $quantity) {
                 $product = $products->get($productId);
+                $available = $product !== null && $warehouseId > 0
+                    ? $product->stockAt($warehouseId)
+                    : (int) ($product->stock_quantity ?? 0);
 
-                if ($product === null || $product->stock_quantity < $quantity) {
+                if ($product === null || $available < $quantity) {
                     $name = $product->name ?? 'produit inconnu';
-                    $available = $product->stock_quantity ?? 0;
 
                     throw ValidationException::withMessages([
-                        'items' => "Stock insuffisant pour « {$name} ». Quantité disponible : {$available}.",
+                        'items' => "Stock insuffisant pour « {$name} » dans l’entrepôt. Quantité disponible : {$available}.",
                     ]);
                 }
             }
@@ -121,6 +141,7 @@ class SalesController extends Controller
             $sale = Sale::create([
                 'reference' => $reference,
                 'session_id' => $validated['session_id'] ?? null,
+                'warehouse_id' => $warehouseId > 0 ? $warehouseId : null,
                 'user_id' => $request->user()->id,
                 'payment_method' => $validated['payment_method'],
                 'total' => $total,
@@ -131,7 +152,12 @@ class SalesController extends Controller
 
             foreach ($items as $productId => $quantity) {
                 $product = $products->get($productId);
-                $product->decrement('stock_quantity', $quantity);
+
+                if ($warehouseId > 0) {
+                    $product->adjustStock($warehouseId, -$quantity);
+                } else {
+                    $product->decrement('stock_quantity', $quantity);
+                }
 
                 $sale->items()->create([
                     'product_id' => $productId,
@@ -144,6 +170,7 @@ class SalesController extends Controller
                     'quantity' => -$quantity,
                     'reason' => 'Vente en caisse',
                     'reference' => $reference,
+                    'warehouse_id' => $warehouseId > 0 ? $warehouseId : null,
                     'user_id' => $request->user()->id,
                 ]);
             }
@@ -168,18 +195,26 @@ class SalesController extends Controller
             return back();
         }
 
-        DB::transaction(function () use ($sale, $request): void {
+        $warehouseId = (int) ($sale->warehouse_id ?? Warehouse::defaultId() ?? 0);
+
+        DB::transaction(function () use ($sale, $request, $warehouseId): void {
             $items = $sale->items()->with('product:id,name,sku,unit')->get();
 
             foreach ($items as $item) {
                 $product = Product::lockForUpdate()->findOrFail($item->product_id);
-                $product->increment('stock_quantity', $item->quantity);
+
+                if ($warehouseId > 0) {
+                    $product->adjustStock($warehouseId, $item->quantity);
+                } else {
+                    $product->increment('stock_quantity', $item->quantity);
+                }
 
                 $product->stockMovements()->create([
                     'type' => 'in',
                     'quantity' => $item->quantity,
                     'reason' => "Annulation vente {$sale->reference}",
                     'reference' => $sale->reference,
+                    'warehouse_id' => $warehouseId > 0 ? $warehouseId : null,
                     'user_id' => $request->user()->id,
                 ]);
             }

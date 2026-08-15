@@ -11,6 +11,7 @@ import {
     ShoppingCart,
     Trash2,
     Wallet,
+    Warehouse as WarehouseIcon,
 } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
@@ -47,11 +48,13 @@ import type {
     PaymentMethod,
     PosProduct,
     Sale,
+    Warehouse,
 } from '@/types';
 
 type Props = {
     products: PosProduct[];
     open_session: CashSession | null;
+    warehouses: Pick<Warehouse, 'id' | 'name' | 'code' | 'is_default'>[];
 };
 
 type CartItem = {
@@ -332,7 +335,7 @@ function SessionPanel({
     );
 }
 
-export default function Pos({ products, open_session }: Props) {
+export default function Pos({ products, open_session, warehouses }: Props) {
     const { permissions } = usePage<{ auth: Auth }>().props.auth;
     const canCreate = permissions.includes('sales.create');
     const canOpenSession = permissions.includes('sessions.open');
@@ -340,6 +343,14 @@ export default function Pos({ products, open_session }: Props) {
 
     const sale = usePage<{ sale?: Sale | null }>().props.sale ?? null;
 
+    const defaultWarehouse =
+        warehouses.find((warehouse) => warehouse.is_default) ??
+        warehouses[0] ??
+        null;
+
+    const [warehouseId, setWarehouseId] = useState<number | null>(
+        defaultWarehouse?.id ?? null,
+    );
     const [cart, setCart] = useState<Record<number, number>>({});
     const [scanValue, setScanValue] = useState('');
     const [search, setSearch] = useState('');
@@ -356,11 +367,13 @@ export default function Pos({ products, open_session }: Props) {
         items: { product_id: number; quantity: number }[];
         payment_method: PaymentMethod;
         session_id: number | null;
+        warehouse_id: number | null;
         discount_percent: string;
     }>({
         items: [],
         payment_method: 'cash',
         session_id: open_session?.id ?? null,
+        warehouse_id: defaultWarehouse?.id ?? null,
         discount_percent: '0',
     });
 
@@ -370,8 +383,14 @@ export default function Pos({ products, open_session }: Props) {
         }
     };
 
-    const availableQuantity = (product: PosProduct) =>
-        product.stock_quantity - (cart[product.id] ?? 0);
+    const availableQuantity = (product: PosProduct) => {
+        const inWarehouse =
+            warehouseId !== null
+                ? (product.stock_by_warehouse?.[warehouseId] ?? 0)
+                : product.stock_quantity;
+
+        return Math.max(inWarehouse - (cart[product.id] ?? 0), 0);
+    };
 
     const addToCart = (product: PosProduct) => {
         if (availableQuantity(product) <= 0) {
@@ -395,7 +414,7 @@ export default function Pos({ products, open_session }: Props) {
                 return rest;
             }
 
-            const max = product.stock_quantity;
+            const max = availableQuantity(product) + (current[product.id] ?? 0);
 
             return { ...current, [product.id]: Math.min(next, max) };
         });
@@ -488,6 +507,7 @@ export default function Pos({ products, open_session }: Props) {
                 quantity: item.quantity,
             })),
             session_id: open_session?.id ?? null,
+            warehouse_id: warehouseId,
             discount_percent: form.data.discount_percent,
         });
 
@@ -527,6 +547,48 @@ export default function Pos({ products, open_session }: Props) {
                     canOpen={canOpenSession}
                     canClose={canCloseSession}
                 />
+
+                {/* Warehouse selector */}
+                {warehouses.length > 0 && (
+                    <div className="flex items-center justify-between gap-3 rounded-xl border p-3 sm:px-4">
+                        <div className="flex items-center gap-2">
+                            <WarehouseIcon className="size-4 text-muted-foreground" />
+                            <span className="text-sm font-medium">
+                                Entrepôt de vente
+                            </span>
+                        </div>
+                        <Select
+                            value={
+                                warehouseId !== null
+                                    ? String(warehouseId)
+                                    : 'none'
+                            }
+                            onValueChange={(v) =>
+                                setWarehouseId(v === 'none' ? null : Number(v))
+                            }
+                        >
+                            <SelectTrigger className="w-full sm:w-64">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="none">
+                                    Tous les entrepôts
+                                </SelectItem>
+                                {warehouses.map((warehouse) => (
+                                    <SelectItem
+                                        key={warehouse.id}
+                                        value={String(warehouse.id)}
+                                    >
+                                        {warehouse.name} ({warehouse.code})
+                                        {warehouse.is_default
+                                            ? ' · défaut'
+                                            : ''}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                )}
 
                 <div className="grid gap-6 lg:grid-cols-5">
                     {/* Product area */}

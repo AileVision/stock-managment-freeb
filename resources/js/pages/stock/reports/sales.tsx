@@ -1,6 +1,8 @@
-import { Head, router } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import {
     Banknote,
+    Download,
+    FileText,
     Percent,
     Receipt,
     ShoppingBag,
@@ -30,6 +32,7 @@ import {
 import { cn } from '@/lib/utils';
 import stock from '@/routes/stock';
 import type {
+    Auth,
     DailyRevenue,
     PaymentBreakdown,
     SalesReportSummary,
@@ -89,6 +92,9 @@ export default function SalesReport({
     top_products,
     filters,
 }: Props) {
+    const { permissions } = usePage<{ auth: Auth }>().props.auth;
+    const canExport = permissions.includes('reports.export');
+
     const [from, setFrom] = useState(filters.from ?? '');
     const [to, setTo] = useState(filters.to ?? '');
     const mounted = useRef(false);
@@ -132,6 +138,16 @@ export default function SalesReport({
     }, [from, to]);
 
     const hasData = summary.sales_count > 0;
+
+    const exportQuery: Record<string, string> = {};
+
+    if (from) {
+        exportQuery.from = from;
+    }
+
+    if (to) {
+        exportQuery.to = to;
+    }
 
     return (
         <>
@@ -178,6 +194,37 @@ export default function SalesReport({
                         >
                             Réinitialiser
                         </Button>
+                        {canExport && (
+                            <div className="flex gap-2">
+                                <Button variant="outline" size="sm" asChild>
+                                    <a
+                                        href={
+                                            stock.reports.sales.export({
+                                                query: exportQuery,
+                                            }).url
+                                        }
+                                        download
+                                    >
+                                        <Download />
+                                        CSV
+                                    </a>
+                                </Button>
+                                <Button variant="outline" size="sm" asChild>
+                                    <a
+                                        href={
+                                            stock.reports.sales.pdf({
+                                                query: exportQuery,
+                                            }).url
+                                        }
+                                        target="_blank"
+                                        rel="noreferrer"
+                                    >
+                                        <FileText />
+                                        PDF
+                                    </a>
+                                </Button>
+                            </div>
+                        )}
                     </div>
                 </div>
 

@@ -7,6 +7,7 @@ use App\Http\Requests\ProductRequest;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\Supplier;
+use App\Models\Warehouse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -66,11 +67,19 @@ class ProductController extends Controller
             $product = Product::create($data);
 
             if ($initialQuantity > 0) {
-                $product->increment('stock_quantity', $initialQuantity);
+                $warehouseId = (int) (Warehouse::defaultId() ?? 0);
+
+                if ($warehouseId > 0) {
+                    $product->adjustStock($warehouseId, $initialQuantity);
+                } else {
+                    $product->increment('stock_quantity', $initialQuantity);
+                }
+
                 $product->stockMovements()->create([
                     'type' => 'in',
                     'quantity' => $initialQuantity,
                     'reason' => 'Stock initial à la création du produit',
+                    'warehouse_id' => $warehouseId > 0 ? $warehouseId : null,
                     'user_id' => auth()->id(),
                 ]);
             }

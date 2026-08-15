@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreStockMovementRequest;
 use App\Models\Product;
 use App\Models\StockMovement;
+use App\Models\Warehouse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -20,9 +21,10 @@ class StockMovementController extends Controller
     public function index(Request $request): Response
     {
         $movements = StockMovement::query()
-            ->with(['product:id,name,sku,unit', 'user:id,name'])
+            ->with(['product:id,name,sku,unit', 'user:id,name', 'warehouse:id,name,code'])
             ->when($request->filled('product_id'), fn ($query) => $query->where('product_id', $request->integer('product_id')))
             ->when($request->filled('type'), fn ($query) => $query->where('type', $request->input('type')))
+            ->when($request->filled('warehouse_id'), fn ($query) => $query->where('warehouse_id', $request->integer('warehouse_id')))
             ->when($request->date('from'), fn ($query, $from) => $query->whereDate('created_at', '>=', $from))
             ->when($request->date('to'), fn ($query, $to) => $query->whereDate('created_at', '<=', $to))
             ->latest()
@@ -32,9 +34,11 @@ class StockMovementController extends Controller
         return Inertia::render('stock/movements', [
             'movements' => $movements,
             'products' => Product::orderBy('name')->get(['id', 'name', 'sku', 'unit', 'stock_quantity']),
+            'warehouses' => Warehouse::orderBy('name')->get(['id', 'name', 'code']),
             'filters' => [
                 'product_id' => $request->input('product_id'),
                 'type' => $request->input('type'),
+                'warehouse_id' => $request->input('warehouse_id'),
                 'from' => $request->string('from')->toString(),
                 'to' => $request->string('to')->toString(),
             ],
@@ -55,14 +59,23 @@ class StockMovementController extends Controller
             default => $quantity,
         };
 
-        DB::transaction(function () use ($validated, $delta): void {
+        $warehouseId = (int) ($validated['warehouse_id'] ?? Warehouse::defaultId() ?? 0);
+
+        DB::transaction(function () use ($validated, $delta, $warehouseId): void {
             $product = Product::lockForUpdate()->findOrFail((int) $validated['product_id']);
-            $product->increment('stock_quantity', $delta);
+
+            if ($warehouseId > 0) {
+                $product->adjustStock($warehouseId, $delta);
+            } else {
+                $product->increment('stock_quantity', $delta);
+            }
+
             $product->stockMovements()->create([
                 'type' => $validated['type'],
                 'quantity' => $delta,
                 'reason' => $validated['reason'],
                 'reference' => $validated['reference'] ?? null,
+                'warehouse_id' => $warehouseId > 0 ? $warehouseId : null,
                 'user_id' => auth()->id(),
             ]);
         });

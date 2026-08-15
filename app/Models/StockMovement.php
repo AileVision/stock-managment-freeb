@@ -14,13 +14,15 @@ use Illuminate\Support\Carbon;
  * @property int $quantity
  * @property string|null $reason
  * @property string|null $reference
+ * @property int|null $warehouse_id
  * @property int|null $user_id
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Product $product
+ * @property-read Warehouse|null $warehouse
  * @property-read User|null $user
  */
-#[Fillable(['product_id', 'type', 'quantity', 'reason', 'reference', 'user_id'])]
+#[Fillable(['product_id', 'type', 'quantity', 'reason', 'reference', 'warehouse_id', 'user_id'])]
 class StockMovement extends Model
 {
     /**
@@ -31,6 +33,16 @@ class StockMovement extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    /**
+     * The warehouse concerned by the movement.
+     *
+     * @return BelongsTo<Warehouse, $this>
+     */
+    public function warehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class);
     }
 
     /**

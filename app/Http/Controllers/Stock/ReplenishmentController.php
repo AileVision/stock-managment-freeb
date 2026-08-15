@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
 use App\Models\Supplier;
+use App\Models\Warehouse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -63,6 +64,7 @@ class ReplenishmentController extends Controller
             'products' => $products,
             'purchase_orders' => $purchaseOrders,
             'suppliers' => Supplier::orderBy('name')->get(['id', 'name']),
+            'warehouses' => Warehouse::query()->orderBy('name')->get(['id', 'name', 'code', 'is_default']),
         ]);
     }
 
@@ -73,12 +75,14 @@ class ReplenishmentController extends Controller
     public function store(StorePurchaseOrderRequest $request): RedirectResponse
     {
         $validated = $request->validated();
+        $warehouseId = (int) ($validated['warehouse_id'] ?? Warehouse::defaultId() ?? 0);
 
-        DB::transaction(function () use ($validated): void {
+        DB::transaction(function () use ($validated, $warehouseId): void {
             $order = PurchaseOrder::create([
                 'supplier_id' => $validated['supplier_id'] ?? null,
                 'reference' => $validated['reference'] ?? null,
-                'status' => 'received',
+                'status' => PurchaseOrder::STATUS_RECEIVED,
+                'warehouse_id' => $warehouseId > 0 ? $warehouseId : null,
                 'user_id' => auth()->id(),
             ]);
 
@@ -86,11 +90,16 @@ class ReplenishmentController extends Controller
                 $product = Product::lockForUpdate()->findOrFail((int) $item['product_id']);
                 $quantity = (int) $item['quantity'];
 
-                $product->increment('stock_quantity', $quantity);
+                if ($warehouseId > 0) {
+                    $product->adjustStock($warehouseId, $quantity);
+                } else {
+                    $product->increment('stock_quantity', $quantity);
+                }
 
                 $order->items()->create([
                     'product_id' => $product->id,
                     'quantity' => $quantity,
+                    'received_quantity' => $quantity,
                 ]);
 
                 $product->stockMovements()->create([
@@ -98,6 +107,7 @@ class ReplenishmentController extends Controller
                     'quantity' => $quantity,
                     'reason' => 'Réception commande fournisseur',
                     'reference' => $validated['reference'] ?? null,
+                    'warehouse_id' => $warehouseId > 0 ? $warehouseId : null,
                     'user_id' => auth()->id(),
                 ]);
             }

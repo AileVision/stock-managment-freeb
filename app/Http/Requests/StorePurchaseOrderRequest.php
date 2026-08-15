@@ -23,6 +23,7 @@ class StorePurchaseOrderRequest extends FormRequest
     {
         return [
             'supplier_id' => ['nullable', 'exists:suppliers,id'],
+            'warehouse_id' => ['nullable', 'exists:warehouses,id'],
             'reference' => ['nullable', 'string', 'max:100'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'exists:products,id'],
@@ -39,9 +40,10 @@ class StorePurchaseOrderRequest extends FormRequest
     {
         return [
             'supplier_id.exists' => 'Le fournisseur sélectionné n’existe pas.',
+            'warehouse_id.exists' => 'L’entrepôt sélectionné n’existe pas.',
             'reference.max' => 'La référence ne doit pas dépasser 100 caractères.',
-            'items.required' => 'Sélectionnez au moins un produit à réceptionner.',
-            'items.min' => 'Sélectionnez au moins un produit à réceptionner.',
+            'items.required' => 'Ajoutez au moins un produit à la commande.',
+            'items.min' => 'Ajoutez au moins un produit à la commande.',
             'items.*.product_id.exists' => 'L’un des produits sélectionnés n’existe pas.',
             'items.*.quantity.required' => 'La quantité est obligatoire pour chaque produit.',
             'items.*.quantity.integer' => 'La quantité doit être un nombre entier.',

@@ -45,6 +45,7 @@ export type StockMovement = {
     reference: string | null;
     created_at: string;
     product: Pick<Product, 'id' | 'name' | 'sku' | 'unit'>;
+    warehouse: Pick<Warehouse, 'id' | 'name' | 'code'> | null;
     user: { id: number; name: string } | null;
 };
 
@@ -249,21 +250,54 @@ export type CashSession = {
 export type PosProduct = Pick<
     Product,
     'id' | 'name' | 'sku' | 'barcode' | 'unit' | 'sale_price' | 'stock_quantity'
->;
+> & {
+    stock_by_warehouse?: Record<number, number>;
+};
+
+export type Warehouse = {
+    id: number;
+    name: string;
+    code: string;
+    address: string | null;
+    is_default: boolean;
+    products_count?: number;
+    total_units?: number;
+};
+
+export type StockTransfer = {
+    id: number;
+    product_id: number;
+    from_warehouse_id: number;
+    to_warehouse_id: number;
+    quantity: number;
+    notes: string | null;
+    created_at: string;
+    product: Pick<Product, 'id' | 'name' | 'sku' | 'unit'>;
+    from_warehouse: Pick<Warehouse, 'id' | 'name' | 'code'>;
+    to_warehouse: Pick<Warehouse, 'id' | 'name' | 'code'>;
+    user: { id: number; name: string } | null;
+};
+
+export type PurchaseOrderStatus = 'draft' | 'ordered' | 'partial' | 'received';
 
 export type PurchaseOrder = {
     id: number;
     supplier_id: number | null;
     reference: string | null;
-    status: 'received';
+    status: PurchaseOrderStatus;
     total_quantity: number;
+    received_quantity: number;
+    progress: number;
     created_at: string;
     user: { id: number; name: string } | null;
     supplier: Pick<Supplier, 'id' | 'name'> | null;
+    warehouse: Pick<Warehouse, 'id' | 'name' | 'code'> | null;
     items: {
         id: number;
         product_id: number;
         quantity: number;
+        received_quantity: number;
+        remaining: number;
         product: Pick<Product, 'id' | 'name' | 'sku' | 'unit'>;
     }[];
 };

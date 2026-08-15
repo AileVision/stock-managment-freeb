@@ -1,13 +1,16 @@
 import { Link, usePage } from '@inertiajs/react';
 import {
     ArrowLeftRight,
+    ArrowRightLeft,
     BarChart3,
     ClipboardList,
     Contact,
     FileCheck2,
     FileText,
+    HardDriveDownload,
     LayoutGrid,
     Package,
+    PackagePlus,
     ShieldCheck,
     ShoppingCart,
     Store,
@@ -16,6 +19,7 @@ import {
     Truck,
     Users,
     Wallet,
+    Warehouse,
 } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavMain } from '@/components/nav-main';
@@ -29,6 +33,7 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
+import backups from '@/routes/backups';
 import { dashboard } from '@/routes';
 import roles from '@/routes/roles';
 import stock from '@/routes/stock';
@@ -68,11 +73,38 @@ export function AppSidebar() {
                   },
               ]
             : []),
+        ...(permissions.includes('warehouses.view')
+            ? [
+                  {
+                      title: 'Entrepôts',
+                      href: stock.warehouses.index(),
+                      icon: Warehouse,
+                  },
+              ]
+            : []),
+        ...(permissions.includes('transfers.view')
+            ? [
+                  {
+                      title: 'Transferts',
+                      href: stock.transfers.index(),
+                      icon: ArrowRightLeft,
+                  },
+              ]
+            : []),
         {
             title: 'Mouvements',
             href: stock.movements.index(),
             icon: ArrowLeftRight,
         },
+        ...(permissions.includes('purchase_orders.view')
+            ? [
+                  {
+                      title: 'Commandes fournisseur',
+                      href: stock.purchaseOrders.index(),
+                      icon: PackagePlus,
+                  },
+              ]
+            : []),
         ...(permissions.includes('sales.create')
             ? [
                   {
@@ -159,6 +191,15 @@ export function AppSidebar() {
                       title: 'Rôles & permissions',
                       href: roles.index(),
                       icon: ShieldCheck,
+                  },
+              ]
+            : []),
+        ...(permissions.includes('backups.manage')
+            ? [
+                  {
+                      title: 'Sauvegardes',
+                      href: backups.index(),
+                      icon: HardDriveDownload,
                   },
               ]
             : []),

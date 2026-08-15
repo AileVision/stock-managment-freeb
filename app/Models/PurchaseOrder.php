@@ -14,16 +14,29 @@ use Illuminate\Support\Carbon;
  * @property int|null $supplier_id
  * @property string|null $reference
  * @property string $status
+ * @property int|null $warehouse_id
  * @property int|null $user_id
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Supplier|null $supplier
+ * @property-read Warehouse|null $warehouse
  * @property-read User|null $user
  * @property-read Collection<int, PurchaseOrderItem> $items
  */
-#[Fillable(['supplier_id', 'reference', 'status', 'user_id'])]
+#[Fillable(['supplier_id', 'reference', 'status', 'warehouse_id', 'user_id'])]
 class PurchaseOrder extends Model
 {
+    /**
+     * Order lifecycle statuses.
+     */
+    public const STATUS_DRAFT = 'draft';
+
+    public const STATUS_ORDERED = 'ordered';
+
+    public const STATUS_PARTIAL = 'partial';
+
+    public const STATUS_RECEIVED = 'received';
+
     /**
      * The supplier of the order.
      *
@@ -32,6 +45,16 @@ class PurchaseOrder extends Model
     public function supplier(): BelongsTo
     {
         return $this->belongsTo(Supplier::class);
+    }
+
+    /**
+     * The warehouse where the order is received.
+     *
+     * @return BelongsTo<Warehouse, $this>
+     */
+    public function warehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class);
     }
 
     /**

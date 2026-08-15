@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\Product;
+use App\Models\Warehouse;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -30,6 +31,7 @@ class StoreStockMovementRequest extends FormRequest
             'quantity' => ['required', 'integer'],
             'reason' => ['required', 'string', 'max:255'],
             'reference' => ['nullable', 'string', 'max:100'],
+            'warehouse_id' => ['nullable', 'exists:warehouses,id'],
         ];
     }
 
@@ -56,11 +58,16 @@ class StoreStockMovementRequest extends FormRequest
 
             $product = Product::query()->whereKey((int) $this->input('product_id'))->first();
 
-            if ($type === 'out' && $product !== null && $product->stock_quantity < $quantity) {
-                $validator->errors()->add(
-                    'quantity',
-                    "Stock insuffisant. Quantité disponible : {$product->stock_quantity}."
-                );
+            if ($type === 'out' && $product !== null) {
+                $warehouseId = (int) ($this->input('warehouse_id') ?? Warehouse::defaultId() ?? 0);
+                $available = $warehouseId > 0 ? $product->stockAt($warehouseId) : (int) $product->stock_quantity;
+
+                if ($available < $quantity) {
+                    $validator->errors()->add(
+                        'quantity',
+                        "Stock insuffisant. Quantité disponible : {$available}."
+                    );
+                }
             }
         });
     }
@@ -82,6 +89,7 @@ class StoreStockMovementRequest extends FormRequest
             'reason.required' => 'Le motif est obligatoire.',
             'reason.max' => 'Le motif ne doit pas dépasser 255 caractères.',
             'reference.max' => 'La référence ne doit pas dépasser 100 caractères.',
+            'warehouse_id.exists' => 'L’entrepôt sélectionné n’existe pas.',
         ];
     }
 }

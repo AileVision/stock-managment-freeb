@@ -31,6 +31,7 @@ class StoreSaleRequest extends FormRequest
             'items.*.quantity' => ['required', 'integer', 'min:1', 'max:9999999'],
             'payment_method' => ['required', Rule::in(array_keys(Sale::PAYMENT_METHODS))],
             'session_id' => ['nullable', 'exists:cash_sessions,id'],
+            'warehouse_id' => ['nullable', 'exists:warehouses,id'],
             'discount_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'notes' => ['nullable', 'string', 'max:1000'],
         ];
@@ -67,6 +68,7 @@ class StoreSaleRequest extends FormRequest
             'items.*.quantity.max' => 'La quantité ne doit pas dépasser 9999999.',
             'payment_method.required' => 'Veuillez choisir un mode de paiement.',
             'payment_method.in' => 'Le mode de paiement sélectionné n’est pas valide.',
+            'warehouse_id.exists' => 'L’entrepôt sélectionné n’existe pas.',
             'discount_percent.numeric' => 'La remise doit être un nombre.',
             'discount_percent.min' => 'La remise doit être positive ou nulle.',
             'discount_percent.max' => 'La remise ne doit pas dépasser 100 %.',

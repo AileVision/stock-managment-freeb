@@ -1,5 +1,5 @@
 import { Head, router, useForm, usePage } from '@inertiajs/react';
-import { Download, FileCheck2, Plus, Search } from 'lucide-react';
+import { Download, FileCheck2, Files, Plus, Search } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import InputError from '@/components/input-error';
@@ -180,6 +180,20 @@ export default function Invoices({
 
     const hasFilters = Boolean(from || to || search.trim());
 
+    const exportQuery: Record<string, string> = {};
+
+    if (from) {
+        exportQuery.from = from;
+    }
+
+    if (to) {
+        exportQuery.to = to;
+    }
+
+    if (search.trim()) {
+        exportQuery.search = search.trim();
+    }
+
     const openCreate = () => {
         form.reset();
         setDialogOpen(true);
@@ -213,12 +227,30 @@ export default function Invoices({
                             téléchargez-les en PDF.
                         </p>
                     </div>
-                    {canCreate && uninvoiced_sales.length > 0 && (
-                        <Button onClick={openCreate} size="sm">
-                            <Plus />
-                            Facturer une vente
-                        </Button>
-                    )}
+                    <div className="flex flex-wrap gap-2">
+                        {invoices.data.length > 0 && (
+                            <Button variant="outline" size="sm" asChild>
+                                <a
+                                    href={
+                                        stock.invoices.exportPdf({
+                                            query: exportQuery,
+                                        }).url
+                                    }
+                                    target="_blank"
+                                    rel="noreferrer"
+                                >
+                                    <Files />
+                                    Toutes les factures (PDF)
+                                </a>
+                            </Button>
+                        )}
+                        {canCreate && uninvoiced_sales.length > 0 && (
+                            <Button onClick={openCreate} size="sm">
+                                <Plus />
+                                Facturer une vente
+                            </Button>
+                        )}
+                    </div>
                 </div>
 
                 {/* Filters */}

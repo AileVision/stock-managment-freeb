@@ -7,12 +7,14 @@ use App\Models\Category;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\StockMovement;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 use stdClass;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ReportsController extends Controller
@@ -105,6 +107,72 @@ class ReportsController extends Controller
      */
     public function sales(Request $request): Response
     {
+        return Inertia::render('stock/reports/sales', $this->salesData($request));
+    }
+
+    /**
+     * Export the sales report as CSV.
+     */
+    public function salesExport(Request $request): StreamedResponse
+    {
+        $data = $this->salesData($request);
+
+        return $this->csvResponse('rapport-ventes.csv', function ($write) use ($data): void {
+            $summary = $data['summary'];
+
+            $write(['Rapport de ventes']);
+            $write(['Période', $data['filters']['from'], '→', $data['filters']['to']]);
+            $write([]);
+            $write(['Chiffre d’affaires', number_format((float) $summary['revenue'], 2, ',', ' ')]);
+            $write(['Nombre de ventes', (int) $summary['sales_count']]);
+            $write(['Panier moyen', number_format((float) $summary['average_basket'], 2, ',', ' ')]);
+            $write(['Marge brute', number_format((float) $summary['margin'], 2, ',', ' ')]);
+            $write(['Taux de marge', number_format((float) $summary['margin_rate'], 1, ',', ' ').' %']);
+            $write([]);
+            $write(['CA PAR JOUR']);
+            $write(['Date', 'Ventes', 'CA']);
+
+            foreach ($data['daily'] as $row) {
+                $write([$row['day'], (int) $row['sales_count'], number_format((float) $row['revenue'], 2, ',', ' ')]);
+            }
+
+            $write([]);
+            $write(['MEILLEURES VENTES']);
+            $write(['Produit', 'Référence', 'Qté', 'CA', 'Coût', 'Marge', 'Taux %']);
+
+            foreach ($data['top_products'] as $row) {
+                $write([
+                    $row['name'],
+                    $row['sku'],
+                    (int) $row['quantity'],
+                    number_format((float) $row['revenue'], 2, ',', ' '),
+                    number_format((float) $row['cost'], 2, ',', ' '),
+                    number_format((float) $row['margin'], 2, ',', ' '),
+                    number_format((float) $row['margin_rate'], 1, ',', ' '),
+                ]);
+            }
+        });
+    }
+
+    /**
+     * Download the sales report as PDF.
+     */
+    public function salesPdf(Request $request): SymfonyResponse
+    {
+        $data = $this->salesData($request);
+
+        return Pdf::loadView('pdf.sales-report', $data)
+            ->setPaper('a4', 'landscape')
+            ->stream('rapport-ventes.pdf');
+    }
+
+    /**
+     * Compute the sales report data shared by the page and the exports.
+     *
+     * @return array<string, mixed>
+     */
+    private function salesData(Request $request): array
+    {
         $from = $request->date('from') ?? now()->subDays(29)->startOfDay();
         $to = $request->date('to') ?? now()->endOfDay();
 
@@ -188,7 +256,7 @@ class ReportsController extends Controller
                 ];
             });
 
-        return Inertia::render('stock/reports/sales', [
+        return [
             'summary' => [
                 'revenue' => round($revenue, 2),
                 'sales_count' => $salesCount,
@@ -203,7 +271,7 @@ class ReportsController extends Controller
                 'from' => $from->toDateString(),
                 'to' => $to->toDateString(),
             ],
-        ]);
+        ];
     }
 
     /**

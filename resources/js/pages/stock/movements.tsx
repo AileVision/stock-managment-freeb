@@ -49,6 +49,7 @@ import type {
     Paginated,
     Product,
     StockMovement,
+    Warehouse,
 } from '@/types';
 
 type Props = {
@@ -57,9 +58,11 @@ type Props = {
         Product,
         'id' | 'name' | 'sku' | 'unit' | 'stock_quantity'
     >[];
+    warehouses: Pick<Warehouse, 'id' | 'name' | 'code'>[];
     filters: {
         product_id: string | null;
         type: string | null;
+        warehouse_id: string | null;
         from: string | null;
         to: string | null;
     };
@@ -74,14 +77,17 @@ const typeBadgeClass: Record<MovementType, string> = {
 
 function MovementForm({
     products,
+    warehouses,
     onDone,
 }: {
     products: Props['products'];
+    warehouses: Props['warehouses'];
     onDone: () => void;
 }) {
     const form = useForm({
         product_id: '',
         type: 'in' as MovementType,
+        warehouse_id: '',
         quantity: '',
         reason: '',
         reference: '',
@@ -158,6 +164,30 @@ function MovementForm({
                         </SelectContent>
                     </Select>
                     <InputError message={form.errors.type} />
+                </div>
+
+                <div className="space-y-2">
+                    <Label>Entrepôt</Label>
+                    <Select
+                        value={form.data.warehouse_id}
+                        onValueChange={(v) => form.setData('warehouse_id', v)}
+                    >
+                        <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Défaut" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="none">— Défaut —</SelectItem>
+                            {warehouses.map((warehouse) => (
+                                <SelectItem
+                                    key={warehouse.id}
+                                    value={String(warehouse.id)}
+                                >
+                                    {warehouse.name} ({warehouse.code})
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <InputError message={form.errors.warehouse_id} />
                 </div>
 
                 <div className="space-y-2">
@@ -277,12 +307,18 @@ function PaginationBar({
     );
 }
 
-export default function Movements({ movements, products, filters }: Props) {
+export default function Movements({
+    movements,
+    products,
+    warehouses,
+    filters,
+}: Props) {
     const { permissions } = usePage<{ auth: Auth }>().props.auth;
     const canCreate = permissions.includes('movements.create');
 
     const [productId, setProductId] = useState(filters.product_id ?? '');
     const [type, setType] = useState(filters.type ?? '');
+    const [warehouseId, setWarehouseId] = useState(filters.warehouse_id ?? '');
     const [from, setFrom] = useState(filters.from ?? '');
     const [to, setTo] = useState(filters.to ?? '');
     const [dialogOpen, setDialogOpen] = useState(false);
@@ -307,6 +343,10 @@ export default function Movements({ movements, products, filters }: Props) {
                 query.type = type;
             }
 
+            if (warehouseId) {
+                query.warehouse_id = warehouseId;
+            }
+
             if (from) {
                 query.from = from;
             }
@@ -327,9 +367,9 @@ export default function Movements({ movements, products, filters }: Props) {
         }, 300);
 
         return () => clearTimeout(timer);
-    }, [productId, type, from, to]);
+    }, [productId, type, warehouseId, from, to]);
 
-    const hasFilters = Boolean(productId || type || from || to);
+    const hasFilters = Boolean(productId || type || warehouseId || from || to);
 
     return (
         <>
@@ -396,6 +436,32 @@ export default function Movements({ movements, products, filters }: Props) {
                         </SelectContent>
                     </Select>
 
+                    {warehouses.length > 0 && (
+                        <Select
+                            value={warehouseId || 'none'}
+                            onValueChange={(v) =>
+                                setWarehouseId(v === 'none' ? '' : v)
+                            }
+                        >
+                            <SelectTrigger className="w-full sm:w-56">
+                                <SelectValue placeholder="Tous les entrepôts" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="none">
+                                    Tous les entrepôts
+                                </SelectItem>
+                                {warehouses.map((warehouse) => (
+                                    <SelectItem
+                                        key={warehouse.id}
+                                        value={String(warehouse.id)}
+                                    >
+                                        {warehouse.name} ({warehouse.code})
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    )}
+
                     {hasFilters && (
                         <Button
                             variant="ghost"
@@ -404,6 +470,7 @@ export default function Movements({ movements, products, filters }: Props) {
                             onClick={() => {
                                 setProductId('');
                                 setType('');
+                                setWarehouseId('');
                                 setFrom('');
                                 setTo('');
                             }}
@@ -436,6 +503,7 @@ export default function Movements({ movements, products, filters }: Props) {
                                 <TableHead>Date</TableHead>
                                 <TableHead>Produit</TableHead>
                                 <TableHead>Type</TableHead>
+                                <TableHead>Entrepôt</TableHead>
                                 <TableHead className="text-right">
                                     Quantité
                                 </TableHead>
@@ -472,6 +540,9 @@ export default function Movements({ movements, products, filters }: Props) {
                                             }
                                         </Badge>
                                     </TableCell>
+                                    <TableCell className="text-muted-foreground">
+                                        {movement.warehouse?.name ?? '—'}
+                                    </TableCell>
                                     <TableCell className="text-right">
                                         <span
                                             className={cn(
@@ -504,7 +575,7 @@ export default function Movements({ movements, products, filters }: Props) {
                             {movements.data.length === 0 && (
                                 <TableRow>
                                     <TableCell
-                                        colSpan={7}
+                                        colSpan={8}
                                         className="h-40 text-center text-muted-foreground"
                                     >
                                         <div className="flex flex-col items-center gap-2">
@@ -540,6 +611,7 @@ export default function Movements({ movements, products, filters }: Props) {
                     {dialogOpen && (
                         <MovementForm
                             products={products}
+                            warehouses={warehouses}
                             onDone={() => setDialogOpen(false)}
                         />
                     )}
