@@ -208,7 +208,7 @@ export default function FinancialReport({
                 </div>
 
                 {/* KPI cards */}
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     <KpiCard
                         label="Chiffre d’affaires TTC"
                         value={formatCurrency(summary.revenue)}
@@ -228,12 +228,28 @@ export default function FinancialReport({
                         iconClass="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
                     />
                     <KpiCard
+                        label="TVA déductible"
+                        value={formatCurrency(summary.purchases_vat)}
+                        hint={`TVA ajoutée aux réceptions : ${formatCurrency(
+                            summary.purchases_ttc,
+                        )} TTC`}
+                        icon={ReceiptText}
+                        iconClass="bg-violet-500/10 text-violet-600 dark:text-violet-400"
+                    />
+                    <KpiCard
+                        label="TVA nette à reverser"
+                        value={formatCurrency(
+                            summary.vat_collected - summary.purchases_vat,
+                        )}
+                        hint="Collectée − déductible (crédit si négatif)"
+                        icon={Landmark}
+                        iconClass="bg-rose-500/10 text-rose-600 dark:text-rose-400"
+                    />
+                    <KpiCard
                         label="Achats (réceptions TTC)"
                         value={formatCurrency(summary.purchases_ttc)}
-                        hint={`HT : ${formatCurrency(
+                        hint={`Montant hors taxes : ${formatCurrency(
                             summary.purchases,
-                        )} · dont TVA : ${formatCurrency(
-                            summary.purchases_vat,
                         )}`}
                         icon={Boxes}
                         iconClass="bg-amber-500/10 text-amber-600 dark:text-amber-400"
