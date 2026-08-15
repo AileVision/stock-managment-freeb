@@ -135,11 +135,13 @@ class ReportsController extends Controller
             $write(['Chiffre d’affaires TTC', number_format((float) $summary['revenue'], 2, ',', ' ')]);
             $write(['TVA collectée', number_format((float) $summary['vat_collected'], 2, ',', ' ')]);
             $write(['Chiffre d’affaires HT', number_format((float) $summary['revenue_ht'], 2, ',', ' ')]);
-            $write(['Achats (réceptions)', number_format((float) $summary['purchases'], 2, ',', ' ')]);
+            $write(['Achats (réceptions) HT', number_format((float) $summary['purchases'], 2, ',', ' ')]);
+            $write(['TVA déductible sur achats', number_format((float) $summary['purchases_vat'], 2, ',', ' ')]);
+            $write(['Achats TTC', number_format((float) $summary['purchases_ttc'], 2, ',', ' ')]);
             $write(['Coût des ventes', number_format((float) $summary['cost_of_goods'], 2, ',', ' ')]);
             $write(['Marge brute', number_format((float) $summary['gross_margin'], 2, ',', ' ')]);
             $write([]);
-            $write(['TVA PAR TAUX']);
+            $write(['TVA COLLECTÉE PAR TAUX']);
             $write(['Taux', 'Base HT', 'TVA']);
 
             foreach ($data['vat_by_rate'] as $row) {
@@ -151,15 +153,31 @@ class ReportsController extends Controller
             }
 
             $write([]);
+            $write(['TVA DÉDUCTIBLE PAR TAUX']);
+            $write(['Taux', 'Base HT', 'TVA', 'Montant TTC']);
+
+            foreach ($data['purchases_vat_by_rate'] as $row) {
+                $write([
+                    $row['name'],
+                    number_format((float) $row['base'], 2, ',', ' '),
+                    number_format((float) $row['vat'], 2, ',', ' '),
+                    number_format((float) $row['ttc'], 2, ',', ' '),
+                ]);
+            }
+
+            $write([]);
             $write(['ACHATS SUR LA PÉRIODE']);
-            $write(['Référence', 'Fournisseur', 'Date', 'Montant HT estimé']);
+            $write(['Référence', 'Fournisseur', 'Date', 'Taux', 'Montant HT', 'TVA', 'Montant TTC']);
 
             foreach ($data['purchase_orders'] as $row) {
                 $write([
                     $row['reference'],
                     $row['supplier'],
                     $row['date'],
-                    number_format((float) $row['amount'], 2, ',', ' '),
+                    $row['rate_name'],
+                    number_format((float) $row['amount_ht'], 2, ',', ' '),
+                    number_format((float) $row['vat'], 2, ',', ' '),
+                    number_format((float) $row['amount_ttc'], 2, ',', ' '),
                 ]);
             }
         });
@@ -195,14 +213,63 @@ class ReportsController extends Controller
             ->whereDate('sales.created_at', '<=', $to)
             ->sum(DB::raw('sale_items.quantity * products.purchase_price'));
 
-        // Achats : commandes réceptionnées (quantités reçues × prix d'achat).
-        $purchases = (float) DB::table('purchase_order_items')
-            ->join('purchase_orders', 'purchase_orders.id', '=', 'purchase_order_items.purchase_order_id')
-            ->join('products', 'products.id', '=', 'purchase_order_items.product_id')
-            ->whereIn('purchase_orders.status', [PurchaseOrder::STATUS_PARTIAL, PurchaseOrder::STATUS_RECEIVED])
-            ->whereDate('purchase_orders.created_at', '>=', $from)
-            ->whereDate('purchase_orders.created_at', '<=', $to)
-            ->sum(DB::raw('purchase_order_items.received_quantity * products.purchase_price'));
+        // Achats : commandes réceptionnées (quantités reçues × prix d'achat HT du
+        // catalogue). La TVA déductible est ajoutée au taux enregistré sur chaque
+        // commande (TVA non incluse dans les prix d'achat).
+        $receivedOrders = PurchaseOrder::query()
+            ->with(['supplier:id,name', 'items.product:id,purchase_price'])
+            ->whereIn('status', [PurchaseOrder::STATUS_PARTIAL, PurchaseOrder::STATUS_RECEIVED])
+            ->whereDate('created_at', '>=', $from)
+            ->whereDate('created_at', '<=', $to)
+            ->latest()
+            ->get();
+
+        $purchases = 0.0;
+        $purchasesVat = 0.0;
+
+        $purchaseOrders = $receivedOrders->map(function (PurchaseOrder $order) use (&$purchases, &$purchasesVat): array {
+            $amountHt = $order->receivedAmountHt();
+            $vat = $order->taxAmount($amountHt);
+            $rate = $order->taxPercent();
+
+            $purchases += $amountHt;
+            $purchasesVat += $vat;
+
+            return [
+                'reference' => $order->reference,
+                'supplier' => $order->supplier->name ?? '—',
+                'date' => $order->created_at?->toDateString(),
+                'rate' => $rate,
+                'rate_name' => $rate > 0 ? "TVA {$rate} %" : 'TVA 0 %',
+                'amount_ht' => $amountHt,
+                'vat' => $vat,
+                'amount_ttc' => round($amountHt + $vat, 2),
+            ];
+        });
+
+        $purchases = round($purchases, 2);
+        $purchasesVat = round($purchasesVat, 2);
+        $purchasesTtc = round($purchases + $purchasesVat, 2);
+
+        // TVA déductible par taux : regroupe les réceptions selon leur taux.
+        $purchasesVatByRate = $purchaseOrders
+            ->groupBy('rate')
+            ->map(function ($grouped, $rate): array {
+                $rate = (float) $rate;
+                $base = round((float) $grouped->sum('amount_ht'), 2);
+                $vat = round((float) $grouped->sum('vat'), 2);
+
+                return [
+                    'name' => $rate > 0 ? "TVA {$rate} %" : 'TVA 0 %',
+                    'rate' => $rate,
+                    'base' => $base,
+                    'vat' => $vat,
+                    'ttc' => round($base + $vat, 2),
+                ];
+            })
+            ->values()
+            ->sortByDesc('vat')
+            ->values();
 
         // TVA par taux : regroupe les ventes selon leur taux enregistré.
         $vatByRate = (clone $salesQuery)->get()
@@ -222,27 +289,6 @@ class ReportsController extends Controller
             ->sortByDesc('vat')
             ->values();
 
-        $purchaseOrders = PurchaseOrder::query()
-            ->with(['supplier:id,name', 'items.product:id,purchase_price'])
-            ->whereIn('status', [PurchaseOrder::STATUS_PARTIAL, PurchaseOrder::STATUS_RECEIVED])
-            ->whereDate('created_at', '>=', $from)
-            ->whereDate('created_at', '<=', $to)
-            ->latest()
-            ->limit(25)
-            ->get()
-            ->map(function (PurchaseOrder $order): array {
-                $amount = round((float) $order->items->sum(
-                    fn ($item): float => $item->received_quantity * (float) $item->product->purchase_price,
-                ), 2);
-
-                return [
-                    'reference' => $order->reference,
-                    'supplier' => $order->supplier->name ?? '—',
-                    'date' => $order->created_at?->toDateString(),
-                    'amount' => $amount,
-                ];
-            });
-
         $revenueHt = round($revenue - $vatCollected, 2);
         $grossMargin = round($revenueHt - $costOfGoods, 2);
 
@@ -253,12 +299,15 @@ class ReportsController extends Controller
                 'vat_collected' => round($vatCollected, 2),
                 'sales_count' => $salesCount,
                 'purchases' => $purchases,
+                'purchases_vat' => $purchasesVat,
+                'purchases_ttc' => $purchasesTtc,
                 'cost_of_goods' => round($costOfGoods, 2),
                 'gross_margin' => $grossMargin,
                 'margin_rate' => $revenueHt > 0 ? round($grossMargin / $revenueHt * 100, 1) : 0,
             ],
             'vat_by_rate' => $vatByRate,
-            'purchase_orders' => $purchaseOrders,
+            'purchases_vat_by_rate' => $purchasesVatByRate,
+            'purchase_orders' => $purchaseOrders->take(25)->values(),
             'filters' => [
                 'from' => $from->toDateString(),
                 'to' => $to->toDateString(),

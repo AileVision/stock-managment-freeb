@@ -9,6 +9,7 @@ use App\Models\Product;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
 use App\Models\Supplier;
+use App\Models\TaxRate;
 use App\Models\Warehouse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -24,7 +25,7 @@ class PurchaseOrderController extends Controller
     public function index(Request $request): Response
     {
         $orders = PurchaseOrder::query()
-            ->with(['supplier:id,name', 'warehouse:id,name,code', 'user:id,name', 'items.product:id,name,sku,unit'])
+            ->with(['supplier:id,name', 'warehouse:id,name,code', 'user:id,name', 'items.product:id,name,sku,unit,purchase_price'])
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->input('status')))
             ->when($request->filled('supplier_id'), fn ($query) => $query->where('supplier_id', $request->integer('supplier_id')))
             ->latest()
@@ -36,7 +37,13 @@ class PurchaseOrderController extends Controller
             'orders' => $orders,
             'suppliers' => Supplier::query()->orderBy('name')->get(['id', 'name']),
             'warehouses' => Warehouse::query()->orderBy('name')->get(['id', 'name', 'code']),
-            'products' => Product::query()->orderBy('name')->get(['id', 'name', 'sku', 'unit']),
+            'products' => Product::query()->orderBy('name')->get(['id', 'name', 'sku', 'unit', 'purchase_price']),
+            'tax_rates' => TaxRate::active()->map(fn (TaxRate $taxRate): array => [
+                'id' => $taxRate->id,
+                'name' => $taxRate->name,
+                'rate' => (float) $taxRate->rate,
+                'is_default' => (bool) $taxRate->is_default,
+            ])->values(),
             'filters' => [
                 'status' => $request->input('status'),
                 'supplier_id' => $request->input('supplier_id'),
@@ -57,6 +64,8 @@ class PurchaseOrderController extends Controller
                 'warehouse_id' => $validated['warehouse_id'] ?? null,
                 'reference' => $validated['reference'] ?? $this->nextReference(),
                 'status' => PurchaseOrder::STATUS_DRAFT,
+                'tax_rate_id' => $validated['tax_rate_id'] ?? null,
+                'tax_percent' => $this->taxRatePercent((int) ($validated['tax_rate_id'] ?? 0)),
                 'user_id' => $request->user()->id,
             ]);
 
@@ -184,6 +193,8 @@ class PurchaseOrderController extends Controller
     {
         $total = $order->items->sum('quantity');
         $received = $order->items->sum('received_quantity');
+        $amountHt = $order->amountHt();
+        $taxAmount = $order->taxAmount($amountHt);
 
         return [
             'id' => $order->id,
@@ -191,6 +202,11 @@ class PurchaseOrderController extends Controller
             'status' => $order->status,
             'supplier' => $order->supplier,
             'warehouse' => $order->warehouse,
+            'tax_rate_id' => $order->tax_rate_id,
+            'tax_percent' => $order->taxPercent(),
+            'amount_ht' => $amountHt,
+            'tax_amount' => $taxAmount,
+            'amount_ttc' => round($amountHt + $taxAmount, 2),
             'total_quantity' => (int) $total,
             'received_quantity' => (int) $received,
             'progress' => $total > 0 ? (int) round($received / $total * 100) : 0,
@@ -205,6 +221,20 @@ class PurchaseOrderController extends Controller
                 'product' => $item->product,
             ]),
         ];
+    }
+
+    /**
+     * Resolve the percentage of a tax rate by id.
+     */
+    private function taxRatePercent(int $taxRateId): float
+    {
+        if ($taxRateId <= 0) {
+            return 0.0;
+        }
+
+        $rate = TaxRate::query()->find($taxRateId);
+
+        return $rate !== null ? (float) $rate->rate : 0.0;
     }
 
     /**

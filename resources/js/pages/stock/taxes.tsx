@@ -1,10 +1,20 @@
 import { Head, router, useForm, usePage } from '@inertiajs/react';
-import { Percent, Pencil, Plus, Star, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import {
+    Boxes,
+    Landmark,
+    Pencil,
+    Percent,
+    Plus,
+    ReceiptText,
+    Star,
+    Trash2,
+} from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     Dialog,
     DialogContent,
@@ -23,12 +33,14 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
+import { formatCurrency, formatDateOnly } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import stock from '@/routes/stock';
-import type { Auth, TaxRate } from '@/types';
+import type { Auth, TaxRate, VatSummary } from '@/types';
 
 type Props = {
     tax_rates: TaxRate[];
+    vat: VatSummary;
 };
 
 function TaxRateForm({
@@ -120,9 +132,84 @@ function TaxRateForm({
     );
 }
 
-export default function Taxes({ tax_rates }: Props) {
+function VatKpi({
+    label,
+    value,
+    hint,
+    icon: Icon,
+    iconClass,
+    valueClass,
+}: {
+    label: string;
+    value: string;
+    hint: string;
+    icon: typeof Landmark;
+    iconClass: string;
+    valueClass?: string;
+}) {
+    return (
+        <Card className="gap-3 py-5">
+            <CardHeader className="flex-row items-center justify-between gap-3 px-5">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                    {label}
+                </CardTitle>
+                <span
+                    className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${iconClass}`}
+                >
+                    <Icon className="size-5" />
+                </span>
+            </CardHeader>
+            <CardContent className="px-5">
+                <div
+                    className={`text-2xl font-semibold tracking-tight ${valueClass ?? ''}`}
+                >
+                    {value}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
+            </CardContent>
+        </Card>
+    );
+}
+
+export default function Taxes({ tax_rates, vat }: Props) {
     const { permissions } = usePage<{ auth: Auth }>().props.auth;
     const canManage = permissions.includes('taxes.manage');
+
+    const [from, setFrom] = useState(vat.filters.from ?? '');
+    const [to, setTo] = useState(vat.filters.to ?? '');
+    const mounted = useRef(false);
+
+    useEffect(() => {
+        if (!mounted.current) {
+            mounted.current = true;
+
+            return;
+        }
+
+        const timer = setTimeout(() => {
+            const query: Record<string, string> = {};
+
+            if (from) {
+                query.from = from;
+            }
+
+            if (to) {
+                query.to = to;
+            }
+
+            router.get(
+                stock.taxes.index({ query }).url,
+                {},
+                {
+                    preserveState: true,
+                    replace: true,
+                    only: ['vat'],
+                },
+            );
+        }, 350);
+
+        return () => clearTimeout(timer);
+    }, [from, to]);
 
     const [dialogOpen, setDialogOpen] = useState(false);
     const [editingRate, setEditingRate] = useState<TaxRate | null>(null);
@@ -176,6 +263,163 @@ export default function Taxes({ tax_rates }: Props) {
                         </Button>
                     )}
                 </div>
+
+                {/* Période + TVA nette à reverser */}
+                <div className="flex flex-wrap items-end gap-3">
+                    <div className="space-y-1.5">
+                        <Label className="text-xs">Du</Label>
+                        <Input
+                            type="date"
+                            value={from}
+                            onChange={(e) => setFrom(e.target.value)}
+                            className="h-9 w-40"
+                        />
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label className="text-xs">Au</Label>
+                        <Input
+                            type="date"
+                            value={to}
+                            onChange={(e) => setTo(e.target.value)}
+                            className="h-9 w-40"
+                        />
+                    </div>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-9"
+                        onClick={() => {
+                            setFrom('');
+                            setTo('');
+                        }}
+                    >
+                        Réinitialiser
+                    </Button>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-3">
+                    <VatKpi
+                        label="TVA collectée"
+                        value={formatCurrency(vat.collected)}
+                        hint={`Ventes validées du ${formatDateOnly(
+                            vat.filters.from,
+                        )} au ${formatDateOnly(vat.filters.to)}`}
+                        icon={Landmark}
+                        iconClass="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
+                    />
+                    <VatKpi
+                        label="TVA déductible"
+                        value={formatCurrency(vat.deductible)}
+                        hint="Réceptions fournisseur sur la période"
+                        icon={Boxes}
+                        iconClass="bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                    />
+                    <VatKpi
+                        label="TVA nette à reverser"
+                        value={formatCurrency(vat.net)}
+                        hint={
+                            vat.net >= 0
+                                ? 'À déclarer au fisc'
+                                : 'Crédit de TVA reportable'
+                        }
+                        icon={ReceiptText}
+                        iconClass="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                        valueClass={
+                            vat.net >= 0
+                                ? 'text-emerald-600 dark:text-emerald-400'
+                                : 'text-red-600 dark:text-red-400'
+                        }
+                    />
+                </div>
+
+                {/* Répartition par taux */}
+                <Card>
+                    <CardHeader className="flex-row items-center justify-between gap-3 px-5">
+                        <div className="space-y-1">
+                            <CardTitle className="text-base">
+                                TVA nette par taux
+                            </CardTitle>
+                            <p className="text-sm text-muted-foreground">
+                                Collectée sur les ventes, déductible sur les
+                                réceptions fournisseur.
+                            </p>
+                        </div>
+                        <Percent className="size-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent className="px-5">
+                        {vat.by_rate.length === 0 ? (
+                            <p className="py-6 text-center text-sm text-muted-foreground">
+                                Aucune vente ni réception sur la période.
+                            </p>
+                        ) : (
+                            <div className="overflow-hidden rounded-xl border">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Taux</TableHead>
+                                            <TableHead className="text-right">
+                                                TVA collectée
+                                            </TableHead>
+                                            <TableHead className="text-right">
+                                                TVA déductible
+                                            </TableHead>
+                                            <TableHead className="text-right">
+                                                Nette à reverser
+                                            </TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {vat.by_rate.map((row) => (
+                                            <TableRow key={row.rate}>
+                                                <TableCell className="font-medium">
+                                                    {row.name}
+                                                </TableCell>
+                                                <TableCell className="text-right tabular-nums">
+                                                    {formatCurrency(
+                                                        row.collected,
+                                                    )}
+                                                </TableCell>
+                                                <TableCell className="text-right tabular-nums">
+                                                    {formatCurrency(
+                                                        row.deductible,
+                                                    )}
+                                                </TableCell>
+                                                <TableCell
+                                                    className={cn(
+                                                        'text-right font-medium tabular-nums',
+                                                        row.net >= 0
+                                                            ? 'text-emerald-600 dark:text-emerald-400'
+                                                            : 'text-red-600 dark:text-red-400',
+                                                    )}
+                                                >
+                                                    {formatCurrency(row.net)}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                        <TableRow>
+                                            <TableCell className="font-semibold">
+                                                Total
+                                            </TableCell>
+                                            <TableCell className="text-right font-semibold tabular-nums">
+                                                {formatCurrency(
+                                                    vat.collected,
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="text-right font-semibold tabular-nums">
+                                                {formatCurrency(
+                                                    vat.deductible,
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="text-right font-semibold tabular-nums">
+                                                {formatCurrency(vat.net)}
+                                            </TableCell>
+                                        </TableRow>
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
 
                 <div className="overflow-hidden rounded-xl border">
                     <Table>

@@ -37,7 +37,12 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
-import { formatDate, formatNumber, unitLabel } from '@/lib/format';
+import {
+    formatCurrency,
+    formatDate,
+    formatNumber,
+    unitLabel,
+} from '@/lib/format';
 import { cn } from '@/lib/utils';
 import stock from '@/routes/stock';
 import type {
@@ -47,6 +52,7 @@ import type {
     PurchaseOrder,
     PurchaseOrderStatus,
     Supplier,
+    TaxRateOption,
     Warehouse,
 } from '@/types';
 
@@ -54,7 +60,11 @@ type Props = {
     orders: Paginated<PurchaseOrder>;
     suppliers: Pick<Supplier, 'id' | 'name'>[];
     warehouses: Pick<Warehouse, 'id' | 'name' | 'code'>[];
-    products: Pick<Product, 'id' | 'name' | 'sku' | 'unit'>[];
+    products: Pick<
+        Product,
+        'id' | 'name' | 'sku' | 'unit' | 'purchase_price'
+    >[];
+    tax_rates: TaxRateOption[];
     filters: {
         status: string | null;
         supplier_id: string | null;
@@ -146,21 +156,28 @@ function CreateOrderForm({
     suppliers,
     warehouses,
     products,
+    taxRates,
     onDone,
 }: {
     suppliers: Props['suppliers'];
     warehouses: Props['warehouses'];
     products: Props['products'];
+    taxRates: TaxRateOption[];
     onDone: () => void;
 }) {
+    const defaultTaxRate =
+        taxRates.find((taxRate) => taxRate.is_default) ?? taxRates[0] ?? null;
+
     const form = useForm<{
         supplier_id: string;
         warehouse_id: string;
+        tax_rate_id: string;
         reference: string;
         items: { product_id: number; quantity: number }[];
     }>({
         supplier_id: '',
         warehouse_id: '',
+        tax_rate_id: defaultTaxRate ? String(defaultTaxRate.id) : '',
         reference: '',
         items: [],
     });
@@ -212,6 +229,28 @@ function CreateOrderForm({
         (sum, row) => sum + (Number(row.quantity) || 0),
         0,
     );
+
+    const round2 = (value: number): number => Math.round(value * 100) / 100;
+    const priceOf = (productId: string): number =>
+        Number(
+            products.find((product) => product.id === Number(productId))
+                ?.purchase_price ?? 0,
+        ) || 0;
+
+    const amountHt = rows.reduce(
+        (sum, row) =>
+            row.product_id
+                ? sum + (Number(row.quantity) || 0) * priceOf(row.product_id)
+                : sum,
+        0,
+    );
+    const selectedTaxRate =
+        taxRates.find(
+            (taxRate) => taxRate.id === Number(form.data.tax_rate_id),
+        ) ?? null;
+    const taxPercent = selectedTaxRate?.rate ?? 0;
+    const vatAmount = round2((amountHt * taxPercent) / 100);
+    const amountTtc = round2(amountHt + vatAmount);
 
     return (
         <form id="order-form" onSubmit={submit} className="grid gap-4">
@@ -276,6 +315,32 @@ function CreateOrderForm({
                     />
                     <InputError message={form.errors.reference} />
                 </div>
+            </div>
+
+            <div className="space-y-2">
+                <Label htmlFor="order-tax">TVA</Label>
+                <Select
+                    value={form.data.tax_rate_id || 'none'}
+                    onValueChange={(v) =>
+                        form.setData('tax_rate_id', v === 'none' ? '' : v)
+                    }
+                >
+                    <SelectTrigger className="w-full sm:max-w-xs">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="none">Sans TVA</SelectItem>
+                        {taxRates.map((taxRate) => (
+                            <SelectItem
+                                key={taxRate.id}
+                                value={String(taxRate.id)}
+                            >
+                                {taxRate.name} ({taxRate.rate}%)
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                <InputError message={form.errors.tax_rate_id} />
             </div>
 
             <div className="overflow-hidden rounded-xl border">
@@ -369,11 +434,29 @@ function CreateOrderForm({
             <InputError message={form.errors.items} />
 
             <DialogFooter className="items-center">
-                <p className="mr-auto text-sm text-muted-foreground">
-                    {formatNumber(totalQuantity)} unité
-                    {totalQuantity > 1 ? 's' : ''} commandée
-                    {totalQuantity > 1 ? 's' : ''}
-                </p>
+                <div className="mr-auto flex flex-col gap-1">
+                    <p className="text-sm text-muted-foreground">
+                        {formatNumber(totalQuantity)} unité
+                        {totalQuantity > 1 ? 's' : ''} commandée
+                        {totalQuantity > 1 ? 's' : ''}
+                    </p>
+                    {amountHt > 0 && (
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                            <span className="text-muted-foreground tabular-nums">
+                                Est. HT {formatCurrency(amountHt)}
+                            </span>
+                            {taxPercent > 0 && (
+                                <span className="text-muted-foreground tabular-nums">
+                                    TVA ({taxPercent}%){' '}
+                                    {formatCurrency(vatAmount)}
+                                </span>
+                            )}
+                            <span className="font-semibold tabular-nums">
+                                TTC {formatCurrency(amountTtc)}
+                            </span>
+                        </div>
+                    )}
+                </div>
                 <Button
                     type="submit"
                     disabled={
@@ -527,6 +610,7 @@ export default function PurchaseOrders({
     suppliers,
     warehouses,
     products,
+    tax_rates,
     filters,
 }: Props) {
     const { permissions } = usePage<{ auth: Auth }>().props.auth;
@@ -739,6 +823,41 @@ export default function PurchaseOrders({
                                                     · par{' '}
                                                     {order.user?.name ?? '—'}
                                                 </p>
+                                                <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                                                    {order.tax_percent > 0 ? (
+                                                        <Badge
+                                                            variant="outline"
+                                                            className="gap-1 border-indigo-500/20 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
+                                                        >
+                                                            TVA{' '}
+                                                            {order.tax_percent}%
+                                                        </Badge>
+                                                    ) : (
+                                                        <span className="text-muted-foreground">
+                                                            Sans TVA
+                                                        </span>
+                                                    )}
+                                                    <span className="tabular-nums">
+                                                        Est. HT{' '}
+                                                        {formatCurrency(
+                                                            order.amount_ht,
+                                                        )}
+                                                    </span>
+                                                    {order.tax_amount > 0 && (
+                                                        <span className="tabular-nums">
+                                                            TVA{' '}
+                                                            {formatCurrency(
+                                                                order.tax_amount,
+                                                            )}
+                                                        </span>
+                                                    )}
+                                                    <span className="font-medium tabular-nums">
+                                                        TTC{' '}
+                                                        {formatCurrency(
+                                                            order.amount_ttc,
+                                                        )}
+                                                    </span>
+                                                </div>
                                             </div>
                                         </div>
 
@@ -867,6 +986,7 @@ export default function PurchaseOrders({
                             suppliers={suppliers}
                             warehouses={warehouses}
                             products={products}
+                            taxRates={tax_rates}
                             onDone={() => setCreateOpen(false)}
                         />
                     )}

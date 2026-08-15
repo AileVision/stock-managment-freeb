@@ -102,12 +102,7 @@ export type MovementReport = {
     out_quantity: number;
 };
 
-export type PaymentMethod =
-    | 'cash'
-    | 'card'
-    | 'transfer'
-    | 'tmoney'
-    | 'flooz';
+export type PaymentMethod = 'cash' | 'card' | 'transfer' | 'tmoney' | 'flooz';
 
 export type TaxRate = {
     id: number;
@@ -117,7 +112,10 @@ export type TaxRate = {
     is_active: boolean;
 };
 
-export type TaxRateOption = Pick<TaxRate, 'id' | 'name' | 'rate' | 'is_default'>;
+export type TaxRateOption = Pick<
+    TaxRate,
+    'id' | 'name' | 'rate' | 'is_default'
+>;
 
 export type SaleStatus = 'completed' | 'cancelled';
 
@@ -260,6 +258,8 @@ export type FinancialSummary = {
     vat_collected: number;
     sales_count: number;
     purchases: number;
+    purchases_vat: number;
+    purchases_ttc: number;
     cost_of_goods: number;
     gross_margin: number;
     margin_rate: number;
@@ -270,13 +270,37 @@ export type VatByRate = {
     rate: number;
     base: number;
     vat: number;
+    ttc?: number;
 };
 
 export type FinancialPurchase = {
     reference: string | null;
     supplier: string;
     date: string | null;
-    amount: number;
+    rate: number;
+    rate_name: string;
+    amount_ht: number;
+    vat: number;
+    amount_ttc: number;
+};
+
+export type VatByRateSummary = {
+    rate: number;
+    name: string;
+    collected: number;
+    deductible: number;
+    net: number;
+};
+
+export type VatSummary = {
+    collected: number;
+    deductible: number;
+    net: number;
+    by_rate: VatByRateSummary[];
+    filters: {
+        from: string;
+        to: string;
+    };
 };
 
 export type CashSession = {
@@ -332,6 +356,11 @@ export type PurchaseOrder = {
     supplier_id: number | null;
     reference: string | null;
     status: PurchaseOrderStatus;
+    tax_rate_id: number | null;
+    tax_percent: number;
+    amount_ht: number;
+    tax_amount: number;
+    amount_ttc: number;
     total_quantity: number;
     received_quantity: number;
     progress: number;

@@ -15,15 +15,18 @@ use Illuminate\Support\Carbon;
  * @property string|null $reference
  * @property string $status
  * @property int|null $warehouse_id
+ * @property int|null $tax_rate_id
+ * @property string $tax_percent
  * @property int|null $user_id
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Supplier|null $supplier
  * @property-read Warehouse|null $warehouse
+ * @property-read TaxRate|null $taxRate
  * @property-read User|null $user
  * @property-read Collection<int, PurchaseOrderItem> $items
  */
-#[Fillable(['supplier_id', 'reference', 'status', 'warehouse_id', 'user_id'])]
+#[Fillable(['supplier_id', 'reference', 'status', 'warehouse_id', 'tax_rate_id', 'tax_percent', 'user_id'])]
 class PurchaseOrder extends Model
 {
     /**
@@ -65,6 +68,59 @@ class PurchaseOrder extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * The tax rate applied to the purchase order.
+     *
+     * @return BelongsTo<TaxRate, $this>
+     */
+    public function taxRate(): BelongsTo
+    {
+        return $this->belongsTo(TaxRate::class);
+    }
+
+    /**
+     * The tax rate as a percentage (0 when none).
+     */
+    public function taxPercent(): float
+    {
+        return (float) $this->tax_percent;
+    }
+
+    /**
+     * The tax amount on a given tax-exclusive amount.
+     */
+    public function taxAmount(float $amountHt): float
+    {
+        $rate = $this->taxPercent();
+
+        if ($rate <= 0 || $amountHt <= 0) {
+            return 0.0;
+        }
+
+        return round($amountHt * $rate / 100, 2);
+    }
+
+    /**
+     * The estimated tax-exclusive amount of the whole order (ordered quantities
+     * × current purchase price).
+     */
+    public function amountHt(): float
+    {
+        return round((float) $this->items->sum(
+            fn (PurchaseOrderItem $item): float => (int) $item->quantity * (float) $item->product->purchase_price,
+        ), 2);
+    }
+
+    /**
+     * The estimated tax-exclusive amount of the received quantities.
+     */
+    public function receivedAmountHt(): float
+    {
+        return round((float) $this->items->sum(
+            fn (PurchaseOrderItem $item): float => (int) $item->received_quantity * (float) $item->product->purchase_price,
+        ), 2);
     }
 
     /**

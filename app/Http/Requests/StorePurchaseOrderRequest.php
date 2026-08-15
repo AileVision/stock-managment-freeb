@@ -24,6 +24,7 @@ class StorePurchaseOrderRequest extends FormRequest
         return [
             'supplier_id' => ['nullable', 'exists:suppliers,id'],
             'warehouse_id' => ['nullable', 'exists:warehouses,id'],
+            'tax_rate_id' => ['nullable', 'exists:tax_rates,id'],
             'reference' => ['nullable', 'string', 'max:100'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'exists:products,id'],
@@ -41,6 +42,7 @@ class StorePurchaseOrderRequest extends FormRequest
         return [
             'supplier_id.exists' => 'Le fournisseur sélectionné n’existe pas.',
             'warehouse_id.exists' => 'L’entrepôt sélectionné n’existe pas.',
+            'tax_rate_id.exists' => 'Le taux de TVA sélectionné n’existe pas.',
             'reference.max' => 'La référence ne doit pas dépasser 100 caractères.',
             'items.required' => 'Ajoutez au moins un produit à la commande.',
             'items.min' => 'Ajoutez au moins un produit à la commande.',

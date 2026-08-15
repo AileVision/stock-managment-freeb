@@ -37,6 +37,7 @@ import type {
 type Props = {
     summary: FinancialSummary;
     vat_by_rate: VatByRate[];
+    purchases_vat_by_rate: VatByRate[];
     purchase_orders: FinancialPurchase[];
     filters: {
         from: string;
@@ -82,6 +83,7 @@ function KpiCard({
 export default function FinancialReport({
     summary,
     vat_by_rate,
+    purchases_vat_by_rate,
     purchase_orders,
     filters,
 }: Props) {
@@ -119,6 +121,7 @@ export default function FinancialReport({
                     only: [
                         'summary',
                         'vat_by_rate',
+                        'purchases_vat_by_rate',
                         'purchase_orders',
                         'filters',
                     ],
@@ -225,9 +228,13 @@ export default function FinancialReport({
                         iconClass="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
                     />
                     <KpiCard
-                        label="Achats (réceptions)"
-                        value={formatCurrency(summary.purchases)}
-                        hint="Commandes réceptionnées sur la période"
+                        label="Achats (réceptions TTC)"
+                        value={formatCurrency(summary.purchases_ttc)}
+                        hint={`HT : ${formatCurrency(
+                            summary.purchases,
+                        )} · dont TVA : ${formatCurrency(
+                            summary.purchases_vat,
+                        )}`}
                         icon={Boxes}
                         iconClass="bg-amber-500/10 text-amber-600 dark:text-amber-400"
                     />
@@ -253,9 +260,9 @@ export default function FinancialReport({
                 )}
 
                 {hasData && (
-                    <div className="grid gap-6 lg:grid-cols-5">
-                        {/* VAT by rate */}
-                        <Card className="lg:col-span-3">
+                    <div className="grid gap-6 lg:grid-cols-2">
+                        {/* VAT collected by rate */}
+                        <Card>
                             <CardHeader className="flex-row items-center justify-between gap-3 px-5">
                                 <div className="space-y-1">
                                     <CardTitle className="text-base">
@@ -280,6 +287,9 @@ export default function FinancialReport({
                                                 <TableHead className="text-right">
                                                     TVA
                                                 </TableHead>
+                                                <TableHead className="text-right">
+                                                    TTC
+                                                </TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
@@ -298,6 +308,11 @@ export default function FinancialReport({
                                                             row.vat,
                                                         )}
                                                     </TableCell>
+                                                    <TableCell className="text-right tabular-nums">
+                                                        {formatCurrency(
+                                                            row.base + row.vat,
+                                                        )}
+                                                    </TableCell>
                                                 </TableRow>
                                             ))}
                                             <TableRow>
@@ -314,6 +329,11 @@ export default function FinancialReport({
                                                         summary.vat_collected,
                                                     )}
                                                 </TableCell>
+                                                <TableCell className="text-right font-semibold tabular-nums">
+                                                    {formatCurrency(
+                                                        summary.revenue,
+                                                    )}
+                                                </TableCell>
                                             </TableRow>
                                         </TableBody>
                                     </Table>
@@ -321,14 +341,106 @@ export default function FinancialReport({
                             </CardContent>
                         </Card>
 
-                        {/* Mini margin overview */}
+                        {/* VAT deductible by rate */}
                         <Card>
+                            <CardHeader className="flex-row items-center justify-between gap-3 px-5">
+                                <div className="space-y-1">
+                                    <CardTitle className="text-base">
+                                        TVA déductible par taux
+                                    </CardTitle>
+                                    <p className="text-sm text-muted-foreground">
+                                        TVA ajoutée aux réceptions fournisseur
+                                        au taux enregistré sur la commande.
+                                    </p>
+                                </div>
+                                <Boxes className="size-4 text-muted-foreground" />
+                            </CardHeader>
+                            <CardContent className="px-5">
+                                {purchases_vat_by_rate.length === 0 ? (
+                                    <p className="py-6 text-center text-sm text-muted-foreground">
+                                        Aucune réception sur la période.
+                                    </p>
+                                ) : (
+                                    <div className="overflow-hidden rounded-xl border">
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>Taux</TableHead>
+                                                    <TableHead className="text-right">
+                                                        Base HT
+                                                    </TableHead>
+                                                    <TableHead className="text-right">
+                                                        TVA
+                                                    </TableHead>
+                                                    <TableHead className="text-right">
+                                                        TTC
+                                                    </TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {purchases_vat_by_rate.map(
+                                                    (row) => (
+                                                        <TableRow
+                                                            key={row.name}
+                                                        >
+                                                            <TableCell className="font-medium">
+                                                                {row.name}
+                                                            </TableCell>
+                                                            <TableCell className="text-right tabular-nums">
+                                                                {formatCurrency(
+                                                                    row.base,
+                                                                )}
+                                                            </TableCell>
+                                                            <TableCell className="text-right font-medium tabular-nums">
+                                                                {formatCurrency(
+                                                                    row.vat,
+                                                                )}
+                                                            </TableCell>
+                                                            <TableCell className="text-right tabular-nums">
+                                                                {formatCurrency(
+                                                                    row.ttc ??
+                                                                        row.base +
+                                                                            row.vat,
+                                                                )}
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ),
+                                                )}
+                                                <TableRow>
+                                                    <TableCell className="font-semibold">
+                                                        Total
+                                                    </TableCell>
+                                                    <TableCell className="text-right font-semibold tabular-nums">
+                                                        {formatCurrency(
+                                                            summary.purchases,
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell className="text-right font-semibold tabular-nums">
+                                                        {formatCurrency(
+                                                            summary.purchases_vat,
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell className="text-right font-semibold tabular-nums">
+                                                        {formatCurrency(
+                                                            summary.purchases_ttc,
+                                                        )}
+                                                    </TableCell>
+                                                </TableRow>
+                                            </TableBody>
+                                        </Table>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        {/* Période summary */}
+                        <Card className="lg:col-span-2">
                             <CardHeader className="px-5">
                                 <CardTitle className="text-base">
                                     Synthèse de la période
                                 </CardTitle>
                             </CardHeader>
-                            <CardContent className="space-y-3 px-5">
+                            <CardContent className="grid gap-x-8 gap-y-3 px-5 sm:grid-cols-2">
                                 <div className="flex items-center justify-between gap-3 text-sm">
                                     <span className="flex items-center gap-2 text-muted-foreground">
                                         <Banknote className="size-4" />
@@ -349,11 +461,32 @@ export default function FinancialReport({
                                 </div>
                                 <div className="flex items-center justify-between gap-3 text-sm">
                                     <span className="flex items-center gap-2 text-muted-foreground">
-                                        <Boxes className="size-4" />
-                                        Achats
+                                        <ReceiptText className="size-4" />
+                                        TVA déductible
                                     </span>
                                     <span className="font-medium tabular-nums">
-                                        {formatCurrency(summary.purchases)}
+                                        {formatCurrency(summary.purchases_vat)}
+                                    </span>
+                                </div>
+                                <div className="flex items-center justify-between gap-3 text-sm">
+                                    <span className="flex items-center gap-2 text-muted-foreground">
+                                        <Landmark className="size-4" />
+                                        TVA nette à reverser
+                                    </span>
+                                    <span className="font-medium tabular-nums">
+                                        {formatCurrency(
+                                            summary.vat_collected -
+                                                summary.purchases_vat,
+                                        )}
+                                    </span>
+                                </div>
+                                <div className="flex items-center justify-between gap-3 text-sm">
+                                    <span className="flex items-center gap-2 text-muted-foreground">
+                                        <Boxes className="size-4" />
+                                        Achats TTC
+                                    </span>
+                                    <span className="font-medium tabular-nums">
+                                        {formatCurrency(summary.purchases_ttc)}
                                     </span>
                                 </div>
                                 <div className="flex items-center justify-between gap-3 text-sm">
@@ -365,7 +498,7 @@ export default function FinancialReport({
                                         {formatCurrency(summary.cost_of_goods)}
                                     </span>
                                 </div>
-                                <div className="flex items-center justify-between gap-3 border-t pt-3 text-sm">
+                                <div className="flex items-center justify-between gap-3 border-t pt-3 text-sm sm:col-span-2">
                                     <span className="flex items-center gap-2 font-medium">
                                         <FileText className="size-4" />
                                         Marge brute
@@ -412,38 +545,69 @@ export default function FinancialReport({
                         </CardHeader>
                         <CardContent className="px-5">
                             <div className="overflow-hidden rounded-xl border">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Référence</TableHead>
-                                            <TableHead>Fournisseur</TableHead>
-                                            <TableHead>Date</TableHead>
-                                            <TableHead className="text-right">
-                                                Montant HT estimé
-                                            </TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {purchase_orders.map((order) => (
-                                            <TableRow key={order.reference}>
-                                                <TableCell className="font-medium">
-                                                    {order.reference ?? '—'}
-                                                </TableCell>
-                                                <TableCell>
-                                                    {order.supplier}
-                                                </TableCell>
-                                                <TableCell className="text-muted-foreground">
-                                                    {formatDateOnly(order.date)}
-                                                </TableCell>
-                                                <TableCell className="text-right font-medium tabular-nums">
-                                                    {formatCurrency(
-                                                        order.amount,
-                                                    )}
-                                                </TableCell>
+                                <div className="overflow-x-auto">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Référence</TableHead>
+                                                <TableHead>
+                                                    Fournisseur
+                                                </TableHead>
+                                                <TableHead>Date</TableHead>
+                                                <TableHead>Taux</TableHead>
+                                                <TableHead className="text-right">
+                                                    Montant HT
+                                                </TableHead>
+                                                <TableHead className="text-right">
+                                                    TVA
+                                                </TableHead>
+                                                <TableHead className="text-right">
+                                                    Montant TTC
+                                                </TableHead>
                                             </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {purchase_orders.map((order) => (
+                                                <TableRow
+                                                    key={
+                                                        order.reference ??
+                                                        order.supplier
+                                                    }
+                                                >
+                                                    <TableCell className="font-medium">
+                                                        {order.reference ?? '—'}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {order.supplier}
+                                                    </TableCell>
+                                                    <TableCell className="text-muted-foreground">
+                                                        {formatDateOnly(
+                                                            order.date,
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {order.rate_name}
+                                                    </TableCell>
+                                                    <TableCell className="text-right font-medium tabular-nums">
+                                                        {formatCurrency(
+                                                            order.amount_ht,
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell className="text-right font-medium tabular-nums">
+                                                        {formatCurrency(
+                                                            order.vat,
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell className="text-right font-medium tabular-nums">
+                                                        {formatCurrency(
+                                                            order.amount_ttc,
+                                                        )}
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </div>
                             </div>
                         </CardContent>
                     </Card>

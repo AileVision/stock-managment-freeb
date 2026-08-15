@@ -360,13 +360,17 @@ class TaxAndMobilePaymentsTest extends TestCase
                 'mobile_phone' => '+228 90 00 00 00',
             ]);
 
-        // Une commande réceptionnée de 3 unités à 100 = 300 d'achats.
+        // Une commande réceptionnée de 3 unités à 100 HT = 300 d'achats, TVA
+        // 18 % ajoutée : 54 de TVA déductible et 354 TTC.
         $supplier = Supplier::create(['name' => 'Fournisseur test']);
+        $defaultRate = TaxRate::defaultRate();
         $order = PurchaseOrder::create([
             'reference' => 'CA-20260814-0001',
             'supplier_id' => $supplier->id,
             'user_id' => $user->id,
             'status' => PurchaseOrder::STATUS_RECEIVED,
+            'tax_rate_id' => $defaultRate->id,
+            'tax_percent' => 18,
         ]);
         $order->items()->create([
             'product_id' => $product->id,
@@ -384,11 +388,70 @@ class TaxAndMobilePaymentsTest extends TestCase
                 ->where('summary.vat_collected', 540)
                 ->where('summary.sales_count', 2)
                 ->where('summary.purchases', 300)
+                ->where('summary.purchases_vat', 54)
+                ->where('summary.purchases_ttc', 354)
                 ->where('summary.cost_of_goods', 300)
                 ->where('summary.gross_margin', 2700)
                 ->has('vat_by_rate', 1)
                 ->where('vat_by_rate.0.vat', 540)
-                ->where('purchase_orders.0.amount', 300));
+                ->has('purchases_vat_by_rate', 1)
+                ->where('purchases_vat_by_rate.0.vat', 54)
+                ->where('purchases_vat_by_rate.0.ttc', 354)
+                ->where('purchase_orders.0.amount_ht', 300)
+                ->where('purchase_orders.0.vat', 54)
+                ->where('purchase_orders.0.amount_ttc', 354)
+                ->where('purchase_orders.0.rate_name', 'TVA 18 %'));
+    }
+
+    public function test_a_purchase_order_stores_its_tax_rate(): void
+    {
+        $user = $this->userWithPermissions(['purchase_orders.view', 'purchase_orders.create']);
+        $product = $this->product(['purchase_price' => 100]);
+        $defaultRate = TaxRate::defaultRate();
+
+        $this->actingAs($user)
+            ->post(route('stock.purchase-orders.store'), [
+                'tax_rate_id' => $defaultRate->id,
+                'items' => [['product_id' => $product->id, 'quantity' => 5]],
+            ])
+            ->assertRedirect(route('stock.purchase-orders.index'));
+
+        $order = PurchaseOrder::firstOrFail();
+
+        $this->assertSame($defaultRate->id, $order->tax_rate_id);
+        $this->assertSame(18.0, (float) $order->tax_percent);
+        // 5 × 100 HT = 500, TVA 18 % = 90.
+        $this->assertSame(500.0, $order->amountHt());
+        $this->assertSame(90.0, $order->taxAmount($order->amountHt()));
+    }
+
+    public function test_an_invalid_purchase_order_tax_rate_is_rejected(): void
+    {
+        $user = $this->userWithPermissions(['purchase_orders.create']);
+        $product = $this->product();
+
+        $this->actingAs($user)
+            ->post(route('stock.purchase-orders.store'), [
+                'tax_rate_id' => 9999,
+                'items' => [['product_id' => $product->id, 'quantity' => 1]],
+            ])
+            ->assertSessionHasErrors('tax_rate_id');
+
+        $this->assertDatabaseCount('purchase_orders', 0);
+    }
+
+    public function test_purchase_orders_page_lists_the_active_tax_rates(): void
+    {
+        $user = $this->userWithPermissions(['purchase_orders.view']);
+
+        $this->actingAs($user)
+            ->get(route('stock.purchase-orders.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('stock/purchase-orders')
+                ->has('tax_rates', 2)
+                ->where('tax_rates.1.name', 'TVA 18 %')
+                ->where('tax_rates.1.is_default', true));
     }
 
     public function test_financial_report_exports_a_csv(): void
