@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
+import { CustomerPicker } from '@/components/customer-picker';
 import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -47,6 +48,7 @@ import type {
     Auth,
     CashSession,
     PaymentMethod,
+    PosCustomer,
     PosProduct,
     Sale,
     TaxRateOption,
@@ -57,6 +59,7 @@ type Props = {
     products: PosProduct[];
     open_session: CashSession | null;
     warehouses: Pick<Warehouse, 'id' | 'name' | 'code' | 'is_default'>[];
+    customers: PosCustomer[];
     tax_rates: TaxRateOption[];
 };
 
@@ -342,6 +345,7 @@ export default function Pos({
     products,
     open_session,
     warehouses,
+    customers,
     tax_rates,
 }: Props) {
     const { permissions } = usePage<{ auth: Auth }>().props.auth;
@@ -383,6 +387,10 @@ export default function Pos({
         discount_percent: string;
         mobile_phone: string;
         mobile_reference: string;
+        customer_id: number | null;
+        credit_due_at: string;
+        down_payment: string;
+        down_payment_method: PaymentMethod;
     }>({
         items: [],
         payment_method: 'cash',
@@ -392,6 +400,10 @@ export default function Pos({
         discount_percent: '0',
         mobile_phone: '',
         mobile_reference: '',
+        customer_id: null,
+        credit_due_at: '',
+        down_payment: '0',
+        down_payment_method: 'cash',
     });
 
     const dismissReceipt = () => {
@@ -478,6 +490,24 @@ export default function Pos({
             ? Math.round((total - total / (1 + taxPercent / 100)) * 100) / 100
             : 0;
     const mobilePayment = isMobilePayment(form.data.payment_method);
+    const isCredit = form.data.payment_method === 'credit';
+    const isAvoir = form.data.payment_method === 'avoir';
+
+    const selectedCustomer =
+        customers.find((customer) => customer.id === form.data.customer_id) ??
+        null;
+    const avoirShortfall =
+        isAvoir && selectedCustomer
+            ? Math.max(total - selectedCustomer.available_avoirs, 0)
+            : 0;
+
+    // L'échéance par défaut est fixée à 30 jours pour les ventes B2B.
+    const defaultDueAt = useMemo(() => {
+        const date = new Date();
+        date.setDate(date.getDate() + 30);
+
+        return date.toISOString().slice(0, 10);
+    }, []);
 
     const filteredProducts = useMemo(() => {
         const query = search.trim().toLowerCase();
@@ -540,6 +570,12 @@ export default function Pos({
             discount_percent: form.data.discount_percent,
             mobile_phone: form.data.mobile_phone,
             mobile_reference: form.data.mobile_reference,
+            customer_id: form.data.customer_id,
+            credit_due_at: isCredit
+                ? form.data.credit_due_at || defaultDueAt
+                : '',
+            down_payment: form.data.down_payment,
+            down_payment_method: form.data.down_payment_method,
         });
 
         form.post(stock.sales.store().url, {
@@ -1027,16 +1063,199 @@ export default function Pos({
                                     </div>
                                 )}
 
+                                {(isCredit || isAvoir) && (
+                                    <div className="space-y-3 rounded-xl border bg-muted/30 p-3">
+                                        <div className="space-y-2">
+                                            <Label>Client</Label>
+                                            <CustomerPicker
+                                                customers={customers}
+                                                value={form.data.customer_id}
+                                                onChange={(id) =>
+                                                    form.setData(
+                                                        'customer_id',
+                                                        id,
+                                                    )
+                                                }
+                                                showAvoirs={isAvoir}
+                                            />
+                                            <InputError
+                                                message={
+                                                    form.errors.customer_id
+                                                }
+                                            />
+                                        </div>
+
+                                        {isCredit && (
+                                            <>
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="credit_due_at">
+                                                        Échéance de paiement
+                                                    </Label>
+                                                    <Input
+                                                        id="credit_due_at"
+                                                        type="date"
+                                                        value={
+                                                            form.data
+                                                                .credit_due_at ||
+                                                            defaultDueAt
+                                                        }
+                                                        onChange={(e) =>
+                                                            form.setData(
+                                                                'credit_due_at',
+                                                                e.target.value,
+                                                            )
+                                                        }
+                                                    />
+                                                    <InputError
+                                                        message={
+                                                            form.errors
+                                                                .credit_due_at
+                                                        }
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="down_payment">
+                                                        Acompte encaissé
+                                                        maintenant
+                                                    </Label>
+                                                    <Input
+                                                        id="down_payment"
+                                                        type="number"
+                                                        min="0"
+                                                        step="0.01"
+                                                        value={
+                                                            form.data
+                                                                .down_payment
+                                                        }
+                                                        onChange={(e) =>
+                                                            form.setData(
+                                                                'down_payment',
+                                                                e.target.value,
+                                                            )
+                                                        }
+                                                        placeholder="0"
+                                                    />
+                                                    <InputError
+                                                        message={
+                                                            form.errors
+                                                                .down_payment
+                                                        }
+                                                    />
+                                                </div>
+                                                {Number(
+                                                    form.data.down_payment,
+                                                ) > 0 && (
+                                                    <div className="space-y-2">
+                                                        <Label>
+                                                            Mode de paiement de
+                                                            l’acompte
+                                                        </Label>
+                                                        <Select
+                                                            value={
+                                                                form.data
+                                                                    .down_payment_method
+                                                            }
+                                                            onValueChange={(
+                                                                v,
+                                                            ) =>
+                                                                form.setData(
+                                                                    'down_payment_method',
+                                                                    v as PaymentMethod,
+                                                                )
+                                                            }
+                                                        >
+                                                            <SelectTrigger className="w-full">
+                                                                <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="cash">
+                                                                    Espèces
+                                                                </SelectItem>
+                                                                <SelectItem value="tmoney">
+                                                                    T-Money
+                                                                </SelectItem>
+                                                                <SelectItem value="flooz">
+                                                                    Flooz
+                                                                </SelectItem>
+                                                                <SelectItem value="transfer">
+                                                                    Virement
+                                                                </SelectItem>
+                                                                <SelectItem value="card">
+                                                                    Carte
+                                                                    bancaire
+                                                                </SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                        <InputError
+                                                            message={
+                                                                form.errors
+                                                                    .down_payment_method
+                                                            }
+                                                        />
+                                                    </div>
+                                                )}
+                                            </>
+                                        )}
+
+                                        {isAvoir && (
+                                            <div className="flex flex-col gap-1 text-sm">
+                                                {selectedCustomer ? (
+                                                    avoirShortfall > 0 ? (
+                                                        <p className="text-amber-600 dark:text-amber-400">
+                                                            Avoirs disponibles :{' '}
+                                                            {formatCurrency(
+                                                                selectedCustomer.available_avoirs,
+                                                            )}{' '}
+                                                            — il manque{' '}
+                                                            {formatCurrency(
+                                                                avoirShortfall,
+                                                            )}{' '}
+                                                            pour régler cette
+                                                            vente.
+                                                        </p>
+                                                    ) : (
+                                                        <p className="text-emerald-600 dark:text-emerald-400">
+                                                            {formatCurrency(
+                                                                selectedCustomer.available_avoirs,
+                                                            )}{' '}
+                                                            d’avoirs
+                                                            disponibles,
+                                                            suffisants pour
+                                                            régler cette vente.
+                                                        </p>
+                                                    )
+                                                ) : (
+                                                    <p className="text-muted-foreground">
+                                                        Sélectionnez un client
+                                                        pour voir ses avoirs
+                                                        disponibles.
+                                                    </p>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
                                 {canCreate && (
                                     <Button
                                         type="submit"
                                         size="lg"
                                         disabled={
                                             cartItems.length === 0 ||
-                                            form.processing
+                                            form.processing ||
+                                            (isCredit &&
+                                                form.data.customer_id ===
+                                                    null) ||
+                                            (isAvoir &&
+                                                (selectedCustomer === null ||
+                                                    avoirShortfall > 0))
                                         }
                                     >
-                                        Valider la vente
+                                        {isCredit
+                                            ? 'Vendre à crédit'
+                                            : isAvoir
+                                              ? 'Régler par avoir'
+                                              : 'Valider la vente'}
                                     </Button>
                                 )}
                             </form>
@@ -1071,6 +1290,42 @@ export default function Pos({
                                         {formatDate(sale.created_at)}
                                     </p>
                                 </div>
+                                {sale.customer && (
+                                    <div className="space-y-1 border-t border-dashed pt-3 text-sm">
+                                        <p className="flex justify-between">
+                                            <span className="text-muted-foreground">
+                                                Client
+                                            </span>
+                                            <span className="font-medium">
+                                                {sale.customer.name}
+                                            </span>
+                                        </p>
+                                        {sale.credit_due_at && (
+                                            <p className="flex justify-between">
+                                                <span className="text-muted-foreground">
+                                                    Échéance
+                                                </span>
+                                                <span className="tabular-nums">
+                                                    {formatDateOnly(
+                                                        sale.credit_due_at,
+                                                    )}
+                                                </span>
+                                            </p>
+                                        )}
+                                        {sale.payment_method === 'credit' && (
+                                            <p className="flex justify-between">
+                                                <span className="text-muted-foreground">
+                                                    Solde restant
+                                                </span>
+                                                <span className="font-medium tabular-nums">
+                                                    {formatCurrency(
+                                                        sale.balance,
+                                                    )}
+                                                </span>
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
                                 <div className="space-y-1.5 border-t border-dashed pt-3">
                                     {sale.items.map((item) => (
                                         <div

@@ -7,12 +7,14 @@ import {
     Contact,
     FileCheck2,
     FileText,
+    HandCoins,
     HardDriveDownload,
     Landmark,
     LayoutGrid,
     Package,
     PackagePlus,
     Percent,
+    RotateCcw,
     ShieldCheck,
     ShoppingCart,
     Store,
@@ -122,6 +124,24 @@ export function AppSidebar() {
                       title: 'Ventes',
                       href: stock.sales.index(),
                       icon: ShoppingCart,
+                  },
+              ]
+            : []),
+        ...(permissions.includes('receivables.view')
+            ? [
+                  {
+                      title: 'Créances',
+                      href: stock.receivables.index(),
+                      icon: HandCoins,
+                  },
+              ]
+            : []),
+        ...(permissions.includes('returns.view')
+            ? [
+                  {
+                      title: 'Retours & avoirs',
+                      href: stock.returns.index(),
+                      icon: RotateCcw,
                   },
               ]
             : []),

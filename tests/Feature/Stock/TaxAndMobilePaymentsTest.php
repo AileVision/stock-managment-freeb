@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Stock;
 
+use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\Product;
 use App\Models\PurchaseOrder;
@@ -452,6 +453,95 @@ class TaxAndMobilePaymentsTest extends TestCase
                 ->has('tax_rates', 2)
                 ->where('tax_rates.1.name', 'TVA 18 %')
                 ->where('tax_rates.1.is_default', true));
+    }
+
+    public function test_financial_report_excludes_unpaid_credit_sales_from_revenue(): void
+    {
+        $user = $this->userWithPermissions(['reports.view']);
+        $customer = Customer::create(['name' => 'Grossiste du Centre']);
+        $product = $this->product(['purchase_price' => 100, 'sale_price' => 150, 'stock_quantity' => 50]);
+
+        // Vente au comptant : 300 TTC, comptabilisée.
+        $cashSale = Sale::create([
+            'reference' => 'V-20260815-0001',
+            'user_id' => $user->id,
+            'payment_method' => 'cash',
+            'total' => 300,
+            'status' => Sale::STATUS_COMPLETED,
+        ]);
+        $cashSale->items()->create([
+            'product_id' => $product->id,
+            'quantity' => 2,
+            'unit_price' => 150,
+        ]);
+
+        // Vente à crédit non encaissée : 600 TTC, exclue du chiffre d'affaires.
+        $creditSale = Sale::create([
+            'reference' => 'V-20260815-0002',
+            'customer_id' => $customer->id,
+            'user_id' => $user->id,
+            'payment_method' => 'credit',
+            'total' => 600,
+            'status' => Sale::STATUS_COMPLETED,
+            'credit_due_at' => now()->addDays(30)->toDateString(),
+        ]);
+        $creditSale->items()->create([
+            'product_id' => $product->id,
+            'quantity' => 4,
+            'unit_price' => 150,
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('stock.reports.financial'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('stock/reports/financial')
+                ->where('summary.revenue', 300)
+                ->where('summary.sales_count', 1)
+                ->where('summary.cost_of_goods', 200)
+                ->where('summary.credit_excluded', 600)
+                ->where('summary.credit_excluded_count', 1));
+    }
+
+    public function test_financial_report_counts_a_settled_credit_sale_as_revenue(): void
+    {
+        $user = $this->userWithPermissions(['reports.view']);
+        $customer = Customer::create(['name' => 'Grossiste du Centre']);
+        $product = $this->product(['purchase_price' => 100, 'sale_price' => 150, 'stock_quantity' => 50]);
+
+        $sale = Sale::create([
+            'reference' => 'V-20260815-0001',
+            'customer_id' => $customer->id,
+            'user_id' => $user->id,
+            'payment_method' => 'credit',
+            'total' => 600,
+            'status' => Sale::STATUS_COMPLETED,
+            'credit_due_at' => now()->addDays(30)->toDateString(),
+        ]);
+        $sale->items()->create([
+            'product_id' => $product->id,
+            'quantity' => 4,
+            'unit_price' => 150,
+        ]);
+
+        // La créance est intégralement réglée : elle compte dans le CA.
+        $sale->payments()->create([
+            'customer_id' => $customer->id,
+            'user_id' => $user->id,
+            'amount' => 600,
+            'payment_method' => 'cash',
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('stock.reports.financial'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('stock/reports/financial')
+                ->where('summary.revenue', 600)
+                ->where('summary.sales_count', 1)
+                ->where('summary.cost_of_goods', 400)
+                ->where('summary.credit_excluded', 0)
+                ->where('summary.credit_excluded_count', 0));
     }
 
     public function test_financial_report_exports_a_csv(): void

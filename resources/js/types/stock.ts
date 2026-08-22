@@ -78,6 +78,13 @@ export type DashboardStats = {
     low_stock: number;
 };
 
+export type DashboardReceivables = {
+    total_outstanding: number;
+    overdue_total: number;
+    overdue_sales: number;
+    customers_with_balance: number;
+};
+
 export type ReportSummary = {
     total_products: number;
     total_units: number;
@@ -102,7 +109,10 @@ export type MovementReport = {
     out_quantity: number;
 };
 
-export type PaymentMethod = 'cash' | 'card' | 'transfer' | 'tmoney' | 'flooz';
+export type PaymentMethod =
+    'cash' | 'card' | 'transfer' | 'tmoney' | 'flooz' | 'credit' | 'avoir';
+
+export type CreditStatus = 'paid' | 'outstanding' | 'overdue';
 
 export type TaxRate = {
     id: number;
@@ -132,6 +142,12 @@ export type Sale = {
     reference: string;
     payment_method: PaymentMethod;
     payment_label: string;
+    customer: { id: number; name: string; phone: string | null } | null;
+    credit_due_at: string | null;
+    paid_amount: number;
+    balance: number;
+    credit_status: CreditStatus;
+    credit_label: string;
     total: number;
     discount_percent: number;
     tax_percent: number;
@@ -144,6 +160,150 @@ export type Sale = {
     user: { id: number; name: string } | null;
     items: SaleItem[];
     invoice: { id: number; reference: string } | null;
+    payments: CustomerPayment[] | null;
+};
+
+export type CustomerPayment = {
+    id: number;
+    amount: number;
+    payment_method: PaymentMethod;
+    payment_label: string;
+    mobile_phone: string | null;
+    mobile_reference: string | null;
+    notes: string | null;
+    paid_at: string;
+    user: { id: number; name: string } | null;
+};
+
+export type SaleReturnItem = {
+    id: number;
+    product_id: number;
+    quantity: number;
+    unit_price: number;
+    product: Pick<Product, 'id' | 'name' | 'sku' | 'unit'>;
+};
+
+export type SaleReturn = {
+    id: number;
+    reference: string;
+    sale_reference: string | null;
+    customer: { id: number; name: string } | null;
+    total: number;
+    refund_method: string;
+    refund_label: string;
+    refund_amount: number;
+    applied_to_balance: number;
+    notes: string | null;
+    returned_at: string;
+    user: { id: number; name: string } | null;
+    items: SaleReturnItem[];
+};
+
+export type CreditNote = {
+    id: number;
+    reference: string;
+    amount: number;
+    used_amount: number;
+    remaining: number;
+    status: 'issued' | 'used';
+    issued_at: string;
+    notes: string | null;
+    customer: Pick<Customer, 'id' | 'name'> | null;
+    return_reference?: string | null;
+    user?: { id: number; name: string } | null;
+};
+
+export type PosCustomer = {
+    id: number;
+    name: string;
+    phone: string | null;
+    email: string | null;
+    available_avoirs: number;
+};
+
+export type ReceivableStats = {
+    total_outstanding: number;
+    overdue_total: number;
+    customers_with_balance: number;
+    overdue_sales: number;
+};
+
+export type ReceivableCustomer = {
+    id: number;
+    name: string;
+    phone: string | null;
+    email: string | null;
+    address: string | null;
+    sales_count: number;
+    total_due: number;
+    total_paid: number;
+    balance: number;
+    overdue_balance: number;
+    overdue_sales: number;
+    available_avoirs: number;
+};
+
+export type ReceivableSale = {
+    id: number;
+    reference: string;
+    created_at: string;
+    credit_due_at: string | null;
+    total: number;
+    paid_amount: number;
+    returned_value: number;
+    balance: number;
+    credit_status: CreditStatus;
+    credit_label: string;
+    items: SaleItem[];
+    payments: CustomerPayment[];
+    returns: {
+        reference: string;
+        total: number;
+        applied_to_balance: number;
+        refund_method: string | null;
+        refund_amount: number;
+        returned_at: string;
+    }[];
+};
+
+export type CustomerDetail = {
+    id: number;
+    name: string;
+    phone: string | null;
+    email: string | null;
+    address: string | null;
+    balance: number;
+    overdue_balance: number;
+    available_avoirs: number;
+    sales: ReceivableSale[];
+    credit_notes: CreditNote[];
+};
+
+export type ReturnFormSale = {
+    id: number;
+    reference: string;
+    created_at: string;
+    payment_method: PaymentMethod;
+    payment_label: string;
+    total: number;
+    customer: { id: number; name: string; phone: string | null } | null;
+    balance: number;
+    items: {
+        id: number;
+        product_id: number;
+        quantity: number;
+        returned_quantity: number;
+        returnable: number;
+        unit_price: number;
+        product: Pick<Product, 'id' | 'name' | 'sku' | 'unit'>;
+    }[];
+};
+
+export type ReturnsStats = {
+    returns_count: number;
+    returns_value: number;
+    refunded: number;
+    avoirs_available: number;
 };
 
 export type Customer = {
@@ -263,6 +423,8 @@ export type FinancialSummary = {
     cost_of_goods: number;
     gross_margin: number;
     margin_rate: number;
+    credit_excluded: number;
+    credit_excluded_count: number;
 };
 
 export type VatByRate = {

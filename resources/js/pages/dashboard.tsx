@@ -5,6 +5,7 @@ import {
     ArrowUpRight,
     Banknote,
     Boxes,
+    HandCoins,
     Package,
     SlidersHorizontal,
 } from 'lucide-react';
@@ -29,6 +30,7 @@ import {
 import { dashboard } from '@/routes';
 import stock from '@/routes/stock';
 import type {
+    DashboardReceivables,
     DashboardStats,
     MovementType,
     Product,
@@ -37,6 +39,7 @@ import type {
 
 type Props = {
     stats: DashboardStats;
+    receivables: DashboardReceivables | null;
     low_stock_products: Product[];
     recent_movements: StockMovement[];
 };
@@ -56,6 +59,7 @@ const movementIconClass: Record<MovementType, string> = {
 
 export default function Dashboard({
     stats,
+    receivables,
     low_stock_products,
     recent_movements,
 }: Props) {
@@ -143,6 +147,79 @@ export default function Dashboard({
                         </Card>
                     ))}
                 </div>
+
+                {/* Receivables indicator */}
+                {receivables && (
+                    <Card>
+                        <CardHeader className="flex-row items-center justify-between gap-3 px-5">
+                            <div className="flex items-center gap-3">
+                                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                                    <HandCoins className="size-5" />
+                                </span>
+                                <div className="space-y-0.5">
+                                    <CardTitle className="text-base">
+                                        Créances clients
+                                    </CardTitle>
+                                    <p className="text-sm text-muted-foreground">
+                                        Ventes à crédit non soldées.
+                                    </p>
+                                </div>
+                            </div>
+                            <Button variant="outline" size="sm" asChild>
+                                <Link href={stock.receivables.index()}>
+                                    Voir les créances
+                                </Link>
+                            </Button>
+                        </CardHeader>
+                        <CardContent className="px-5">
+                            <div className="grid gap-3 sm:grid-cols-2">
+                                <div className="rounded-xl border p-4">
+                                    <p className="text-xs text-muted-foreground">
+                                        Montant total impayé
+                                    </p>
+                                    <p className="text-2xl font-semibold tracking-tight tabular-nums">
+                                        {formatCurrency(
+                                            receivables.total_outstanding,
+                                        )}
+                                    </p>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                        {formatNumber(
+                                            receivables.customers_with_balance,
+                                        )}{' '}
+                                        client
+                                        {receivables.customers_with_balance > 1
+                                            ? 's'
+                                            : ''}{' '}
+                                        à solde impayé
+                                    </p>
+                                </div>
+                                <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4">
+                                    <p className="text-xs text-muted-foreground">
+                                        En retard
+                                    </p>
+                                    <p className="text-2xl font-semibold tracking-tight text-red-600 tabular-nums dark:text-red-400">
+                                        {formatCurrency(
+                                            receivables.overdue_total,
+                                        )}
+                                    </p>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                        {formatNumber(
+                                            receivables.overdue_sales,
+                                        )}{' '}
+                                        vente
+                                        {receivables.overdue_sales > 1
+                                            ? 's'
+                                            : ''}{' '}
+                                        échue
+                                        {receivables.overdue_sales > 1
+                                            ? 's'
+                                            : ''}
+                                    </p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
 
                 <div className="grid gap-6 lg:grid-cols-5">
                     {/* Low stock products */}

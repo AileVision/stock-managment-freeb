@@ -1,4 +1,5 @@
 import type {
+    CreditStatus,
     MovementType,
     PaymentMethod,
     QuoteStatus,
@@ -66,7 +67,25 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
     transfer: 'Virement',
     tmoney: 'T-Money',
     flooz: 'Flooz',
+    credit: 'À crédit',
+    avoir: 'Avoir',
 };
+
+export const CREDIT_STATUS_LABELS: Record<CreditStatus, string> = {
+    paid: 'Soldé',
+    outstanding: 'En cours',
+    overdue: 'En retard',
+};
+
+export function formatDateOnly(value: string | null | undefined): string {
+    if (!value) {
+        return '—';
+    }
+
+    return new Intl.DateTimeFormat('fr-FR', {
+        dateStyle: 'medium',
+    }).format(new Date(value));
+}
 
 export function isMobilePayment(method: PaymentMethod): boolean {
     return method === 'tmoney' || method === 'flooz';
@@ -84,13 +103,3 @@ export const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
     converted: 'Converti',
     rejected: 'Refusé',
 };
-
-export function formatDateOnly(value: string | null | undefined): string {
-    if (!value) {
-        return '—';
-    }
-
-    return new Intl.DateTimeFormat('fr-FR', {
-        dateStyle: 'medium',
-    }).format(new Date(value));
-}

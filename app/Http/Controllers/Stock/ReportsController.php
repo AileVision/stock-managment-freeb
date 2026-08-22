@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers\Stock;
 
+use App\Concerns\ExportsCsv;
 use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\PurchaseOrder;
 use App\Models\Sale;
+use App\Models\SaleItem;
 use App\Models\StockMovement;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -20,6 +22,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ReportsController extends Controller
 {
+    use ExportsCsv;
+
     /**
      * Show stock reports: valuation by category and movement summaries.
      */
@@ -133,6 +137,7 @@ class ReportsController extends Controller
             $write(['Période', $data['filters']['from'], '→', $data['filters']['to']]);
             $write([]);
             $write(['Chiffre d’affaires TTC', number_format((float) $summary['revenue'], 2, ',', ' ')]);
+            $write(['Ventes à crédit non encaissées (exclues du CA)', number_format((float) $summary['credit_excluded'], 2, ',', ' ')]);
             $write(['TVA collectée', number_format((float) $summary['vat_collected'], 2, ',', ' ')]);
             $write(['Chiffre d’affaires HT', number_format((float) $summary['revenue_ht'], 2, ',', ' ')]);
             $write(['Achats (réceptions) HT', number_format((float) $summary['purchases'], 2, ',', ' ')]);
@@ -193,25 +198,41 @@ class ReportsController extends Controller
         $from = $request->date('from') ?? now()->startOfMonth();
         $to = $request->date('to') ?? now()->endOfDay();
 
-        $salesQuery = Sale::query()
+        $sales = Sale::query()
             ->where('status', Sale::STATUS_COMPLETED)
             ->whereDate('created_at', '>=', $from)
-            ->whereDate('created_at', '<=', $to);
+            ->whereDate('created_at', '<=', $to)
+            ->with(['payments', 'returns', 'items.product:id,purchase_price'])
+            ->get();
 
-        $revenue = (float) (clone $salesQuery)->sum('total');
-        $salesCount = (clone $salesQuery)->count();
+        // Le chiffre d'affaires ne comptabilise que les ventes encaissées : les
+        // ventes à crédit non soldées (solde impayé) sont exclues du CA, de la
+        // TVA et du coût des ventes tant qu'elles ne sont pas intégralement
+        // réglées. Une vente à crédit soldée compte comme une vente normale.
+        $excludedSales = $sales->filter(
+            fn (Sale $sale): bool => $sale->isCredit() && $sale->balance() > 0.01,
+        );
+
+        $includedSales = $sales->filter(
+            fn (Sale $sale): bool => ! $sale->isCredit() || $sale->balance() <= 0.01,
+        );
+
+        $revenue = round((float) $includedSales->sum('total'), 2);
+        $salesCount = $includedSales->count();
 
         // TVA collectée : extraite du total TTC au taux enregistré sur la vente.
-        $vatCollected = (float) (clone $salesQuery)->get()->sum(fn (Sale $sale): float => $sale->taxAmount());
+        $vatCollected = round((float) $includedSales->sum(fn (Sale $sale): float => $sale->taxAmount()), 2);
 
-        // Coût des ventes : quantité vendue × prix d'achat actuel du produit.
-        $costOfGoods = (float) DB::table('sale_items')
-            ->join('sales', 'sales.id', '=', 'sale_items.sale_id')
-            ->join('products', 'products.id', '=', 'sale_items.product_id')
-            ->where('sales.status', Sale::STATUS_COMPLETED)
-            ->whereDate('sales.created_at', '>=', $from)
-            ->whereDate('sales.created_at', '<=', $to)
-            ->sum(DB::raw('sale_items.quantity * products.purchase_price'));
+        // Coût des ventes : quantité vendue × prix d'achat actuel du produit,
+        // limité aux ventes comptabilisées dans le chiffre d'affaires.
+        $costOfGoods = round((float) $includedSales->flatMap(
+            fn (Sale $sale) => $sale->items->map(
+                fn (SaleItem $item): float => $item->quantity * (float) $item->product->purchase_price,
+            ),
+        )->sum(), 2);
+
+        $creditExcluded = round((float) $excludedSales->sum('total'), 2);
+        $creditExcludedCount = $excludedSales->count();
 
         // Achats : commandes réceptionnées (quantités reçues × prix d'achat HT du
         // catalogue). La TVA déductible est ajoutée au taux enregistré sur chaque
@@ -271,8 +292,8 @@ class ReportsController extends Controller
             ->sortByDesc('vat')
             ->values();
 
-        // TVA par taux : regroupe les ventes selon leur taux enregistré.
-        $vatByRate = (clone $salesQuery)->get()
+        // TVA par taux : regroupe les ventes comptabilisées selon leur taux.
+        $vatByRate = $includedSales
             ->groupBy('tax_percent')
             ->map(function ($grouped, $rate): array {
                 $rate = (float) $rate;
@@ -294,16 +315,18 @@ class ReportsController extends Controller
 
         return [
             'summary' => [
-                'revenue' => round($revenue, 2),
+                'revenue' => $revenue,
                 'revenue_ht' => $revenueHt,
-                'vat_collected' => round($vatCollected, 2),
+                'vat_collected' => $vatCollected,
                 'sales_count' => $salesCount,
                 'purchases' => $purchases,
                 'purchases_vat' => $purchasesVat,
                 'purchases_ttc' => $purchasesTtc,
-                'cost_of_goods' => round($costOfGoods, 2),
+                'cost_of_goods' => $costOfGoods,
                 'gross_margin' => $grossMargin,
                 'margin_rate' => $revenueHt > 0 ? round($grossMargin / $revenueHt * 100, 1) : 0,
+                'credit_excluded' => $creditExcluded,
+                'credit_excluded_count' => $creditExcludedCount,
             ],
             'vat_by_rate' => $vatByRate,
             'purchases_vat_by_rate' => $purchasesVatByRate,
@@ -541,31 +564,4 @@ class ReportsController extends Controller
         });
     }
 
-    /**
-     * Stream a CSV file with UTF-8 BOM and a French-friendly separator.
-     */
-    private function csvResponse(string $filename, callable $rows): StreamedResponse
-    {
-        $response = new StreamedResponse(function () use ($rows) {
-            $handle = fopen('php://output', 'w');
-
-            if ($handle === false) {
-                return;
-            }
-
-            // BOM UTF-8 pour un rendu correct dans Excel.
-            fwrite($handle, "\xEF\xBB\xBF");
-
-            $rows(function (array $row) use ($handle): void {
-                fputcsv($handle, $row, ';');
-            });
-
-            fclose($handle);
-        });
-
-        $response->headers->set('Content-Type', 'text/csv; charset=UTF-8');
-        $response->headers->set('Content-Disposition', 'attachment; filename="'.$filename.'"');
-
-        return $response;
-    }
 }

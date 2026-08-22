@@ -5,6 +5,9 @@ namespace App\Http\Controllers\Stock;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreSaleRequest;
 use App\Models\CashSession;
+use App\Models\CreditNote;
+use App\Models\Customer;
+use App\Models\CustomerPayment;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\SaleItem;
@@ -27,7 +30,7 @@ class SalesController extends Controller
     public function index(Request $request): Response
     {
         $sales = Sale::query()
-            ->with(['user:id,name', 'items.product:id,name,sku,unit', 'invoice:id,sale_id,reference'])
+            ->with(['user:id,name', 'customer:id,name,phone', 'payments', 'items.product:id,name,sku,unit', 'invoice:id,sale_id,reference'])
             ->when($request->date('from'), fn ($query, $from) => $query->whereDate('created_at', '>=', $from))
             ->when($request->date('to'), fn ($query, $to) => $query->whereDate('created_at', '<=', $to))
             ->when($request->filled('payment_method'), fn ($query) => $query->where('payment_method', $request->input('payment_method')))
@@ -81,12 +84,25 @@ class SalesController extends Controller
             )
             ->first();
 
+        $customers = Customer::query()
+            ->with(['creditNotes' => fn ($query) => $query->where('status', CreditNote::STATUS_ISSUED)])
+            ->orderBy('name')
+            ->get(['id', 'name', 'phone', 'email'])
+            ->map(fn (Customer $customer): array => [
+                'id' => $customer->id,
+                'name' => $customer->name,
+                'phone' => $customer->phone,
+                'email' => $customer->email,
+                'available_avoirs' => $customer->availableAvoirs(),
+            ]);
+
         return Inertia::render('stock/pos', [
             'products' => $products,
             'open_session' => $openSession !== null
                 ? $this->presentSession($openSession)
                 : null,
             'warehouses' => Warehouse::query()->orderBy('name')->get(['id', 'name', 'code', 'is_default']),
+            'customers' => $customers,
             'tax_rates' => TaxRate::active()->map(fn (TaxRate $taxRate): array => [
                 'id' => $taxRate->id,
                 'name' => $taxRate->name,
@@ -150,11 +166,32 @@ class SalesController extends Controller
 
             $reference = $this->nextReference();
 
+            $customerId = in_array($validated['payment_method'], Sale::CUSTOMER_PAYMENT_METHODS, true)
+                ? (int) ($validated['customer_id'] ?? 0)
+                : null;
+
+            // Une vente réglée par avoir consomme les avoirs du client (le plus
+            // ancien d'abord) ; le montant total doit être couvert.
+            $customer = null;
+
+            if ($validated['payment_method'] === 'avoir') {
+                $customer = Customer::query()->with('creditNotes')->find($customerId);
+                $available = $customer?->availableAvoirs() ?? 0.0;
+
+                if ($available < $total - 0.01) {
+                    throw ValidationException::withMessages([
+                        'payment_method' => "Avoirs disponibles insuffisants pour « {$customer?->name} » ({$available} FCFA).",
+                    ]);
+                }
+            }
+
             $sale = Sale::create([
                 'reference' => $reference,
                 'session_id' => $validated['session_id'] ?? null,
                 'warehouse_id' => $warehouseId > 0 ? $warehouseId : null,
                 'user_id' => $request->user()->id,
+                'customer_id' => $customerId,
+                'credit_due_at' => $validated['credit_due_at'] ?? null,
                 'payment_method' => $validated['payment_method'],
                 'total' => $total,
                 'discount_percent' => $discountPercent,
@@ -191,6 +228,25 @@ class SalesController extends Controller
                 ]);
             }
 
+            // Encaissement d'un acompte éventuel au moment de la vente à crédit.
+            $downPayment = (float) ($validated['down_payment'] ?? 0);
+
+            if ($validated['payment_method'] === 'credit' && $downPayment > 0) {
+                $sale->payments()->create([
+                    'customer_id' => $customerId,
+                    'user_id' => $request->user()->id,
+                    'amount' => $downPayment,
+                    'payment_method' => $validated['down_payment_method'] ?? 'cash',
+                    'notes' => 'Acompte à la vente',
+                    'paid_at' => now(),
+                ]);
+            }
+
+            // Règlement par avoir : on consomme les avoirs du client.
+            if ($validated['payment_method'] === 'avoir' && $customer !== null) {
+                $customer->consumeAvoirs($total, $sale, $request->user()->id);
+            }
+
             return $sale->load('items.product:id,name,sku,unit');
         });
 
@@ -202,11 +258,21 @@ class SalesController extends Controller
 
     /**
      * Cancel a completed sale: restores the stock and logs the return.
+     * A sale with recorded payments cannot be cancelled (settle it first).
      */
     public function destroy(Request $request, Sale $sale): RedirectResponse
     {
         if ($sale->status !== Sale::STATUS_COMPLETED) {
             Inertia::flash('toast', ['type' => 'error', 'message' => 'Cette vente est déjà annulée.']);
+
+            return back();
+        }
+
+        if ($sale->payments()->exists()) {
+            Inertia::flash('toast', [
+                'type' => 'error',
+                'message' => 'Cette vente a des encaissements enregistrés : utilisez un retour client pour l’annuler.',
+            ]);
 
             return back();
         }
@@ -255,6 +321,14 @@ class SalesController extends Controller
             'reference' => $sale->reference,
             'payment_method' => $sale->payment_method,
             'payment_label' => Sale::PAYMENT_METHODS[$sale->payment_method] ?? $sale->payment_method,
+            'customer' => $sale->relationLoaded('customer') && $sale->customer !== null
+                ? ['id' => $sale->customer->id, 'name' => $sale->customer->name, 'phone' => $sale->customer->phone]
+                : null,
+            'credit_due_at' => $sale->credit_due_at,
+            'paid_amount' => $sale->paidAmount(),
+            'balance' => $sale->balance(),
+            'credit_status' => $sale->creditStatus(),
+            'credit_label' => $sale->creditStatusLabel(),
             'total' => (float) $sale->total,
             'discount_percent' => (float) $sale->discount_percent,
             'tax_percent' => (float) $sale->tax_percent,
@@ -275,6 +349,29 @@ class SalesController extends Controller
             'invoice' => $sale->relationLoaded('invoice') && $sale->invoice !== null
                 ? ['id' => $sale->invoice->id, 'reference' => $sale->invoice->reference]
                 : null,
+            'payments' => $sale->relationLoaded('payments')
+                ? $sale->payments->map(fn (CustomerPayment $payment): array => $this->presentPayment($payment))->values()
+                : null,
+        ];
+    }
+
+    /**
+     * Build a human-readable representation of a customer payment.
+     *
+     * @return array<string, mixed>
+     */
+    private function presentPayment(CustomerPayment $payment): array
+    {
+        return [
+            'id' => $payment->id,
+            'amount' => (float) $payment->amount,
+            'payment_method' => $payment->payment_method,
+            'payment_label' => CustomerPayment::PAYMENT_METHODS[$payment->payment_method] ?? $payment->payment_method,
+            'mobile_phone' => $payment->mobile_phone,
+            'mobile_reference' => $payment->mobile_reference,
+            'notes' => $payment->notes,
+            'paid_at' => $payment->paid_at,
+            'user' => $payment->user,
         ];
     }
 

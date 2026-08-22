@@ -11,8 +11,10 @@ use App\Http\Controllers\Stock\InvoiceController;
 use App\Http\Controllers\Stock\ProductController;
 use App\Http\Controllers\Stock\PurchaseOrderController;
 use App\Http\Controllers\Stock\QuoteController;
+use App\Http\Controllers\Stock\ReceivablesController;
 use App\Http\Controllers\Stock\ReplenishmentController;
 use App\Http\Controllers\Stock\ReportsController;
+use App\Http\Controllers\Stock\ReturnsController;
 use App\Http\Controllers\Stock\SalesController;
 use App\Http\Controllers\Stock\StockMovementController;
 use App\Http\Controllers\Stock\SupplierController;
@@ -142,6 +144,43 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('sales/{sale}/pdf', [SalesController::class, 'ticketPdf'])
             ->middleware('can:sales.view')
             ->name('stock.sales.ticket-pdf');
+
+        // Créances clients : ventes à crédit, soldes impayés et relances.
+        Route::get('receivables', [ReceivablesController::class, 'index'])
+            ->middleware('can:receivables.view')
+            ->name('stock.receivables.index');
+        Route::get('receivables/customer/{customer}', [ReceivablesController::class, 'customer'])
+            ->middleware('can:receivables.view')
+            ->name('stock.receivables.customer');
+        Route::post('receivables/payments', [ReceivablesController::class, 'storePayment'])
+            ->middleware('can:receivables.manage')
+            ->name('stock.receivables.payments.store');
+        Route::get('receivables/payments/{payment}/receipt', [ReceivablesController::class, 'receiptPdf'])
+            ->middleware('can:receivables.manage')
+            ->name('stock.receivables.payments.receipt');
+        Route::get('receivables/export', [ReceivablesController::class, 'exportCsv'])
+            ->middleware('can:receivables.manage')
+            ->name('stock.receivables.export');
+        Route::get('receivables/customer/{customer}/relance', [ReceivablesController::class, 'relancePdf'])
+            ->middleware('can:receivables.manage')
+            ->name('stock.receivables.relance');
+
+        // Retours clients et avoirs.
+        Route::get('returns', [ReturnsController::class, 'index'])
+            ->middleware('can:returns.view')
+            ->name('stock.returns.index');
+        Route::get('returns/create', [ReturnsController::class, 'create'])
+            ->middleware('can:returns.create')
+            ->name('stock.returns.create');
+        Route::post('returns', [ReturnsController::class, 'store'])
+            ->middleware('can:returns.create')
+            ->name('stock.returns.store');
+        Route::get('returns/{saleReturn}/pdf', [ReturnsController::class, 'pdf'])
+            ->middleware('can:returns.view')
+            ->name('stock.returns.pdf');
+        Route::get('returns/avoirs/{creditNote}/pdf', [ReturnsController::class, 'creditNotePdf'])
+            ->middleware('can:returns.view')
+            ->name('stock.returns.avoir-pdf');
 
         Route::get('cash-sessions', [CashSessionController::class, 'index'])
             ->middleware('can:sessions.view')

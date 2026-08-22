@@ -3,7 +3,9 @@
 namespace Tests\Feature\Stock;
 
 use App\Models\Category;
+use App\Models\Customer;
 use App\Models\Product;
+use App\Models\Sale;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\Concerns\InteractsWithPermissions;
@@ -121,5 +123,72 @@ class DashboardStatsTest extends TestCase
                 ->where('stats.stock_value', 0)
                 ->has('low_stock_products', 0)
                 ->has('recent_movements', 0));
+    }
+
+    public function test_dashboard_hides_receivables_without_permission(): void
+    {
+        $user = $this->userWithPermissions(['dashboard.view']);
+        $customer = Customer::create(['name' => 'Grossiste']);
+
+        Sale::create([
+            'reference' => 'V-20260815-0001',
+            'customer_id' => $customer->id,
+            'user_id' => $user->id,
+            'payment_method' => 'credit',
+            'total' => 1000,
+            'status' => Sale::STATUS_COMPLETED,
+            'credit_due_at' => now()->addDays(30)->toDateString(),
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('dashboard')
+                ->where('receivables', null));
+    }
+
+    public function test_dashboard_shows_the_receivables_indicator(): void
+    {
+        $user = $this->userWithPermissions(['dashboard.view', 'receivables.view']);
+        $customer = Customer::create(['name' => 'Grossiste']);
+
+        // Une créance en cours, échéance future : solde 1000.
+        Sale::create([
+            'reference' => 'V-20260815-0001',
+            'customer_id' => $customer->id,
+            'user_id' => $user->id,
+            'payment_method' => 'credit',
+            'total' => 1000,
+            'status' => Sale::STATUS_COMPLETED,
+            'credit_due_at' => now()->addDays(30)->toDateString(),
+        ]);
+
+        // Une créance échue et partiellement réglée : solde 500, en retard.
+        $overdue = Sale::create([
+            'reference' => 'V-20260815-0002',
+            'customer_id' => $customer->id,
+            'user_id' => $user->id,
+            'payment_method' => 'credit',
+            'total' => 1000,
+            'status' => Sale::STATUS_COMPLETED,
+            'credit_due_at' => now()->subDays(5)->toDateString(),
+        ]);
+        $overdue->payments()->create([
+            'customer_id' => $customer->id,
+            'user_id' => $user->id,
+            'amount' => 500,
+            'payment_method' => 'cash',
+        ]);
+
+        $this->actingAs($user)
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('dashboard')
+                ->where('receivables.total_outstanding', 1500)
+                ->where('receivables.overdue_total', 500)
+                ->where('receivables.overdue_sales', 1)
+                ->where('receivables.customers_with_balance', 1));
     }
 }

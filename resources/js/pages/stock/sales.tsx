@@ -36,8 +36,10 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import {
+    CREDIT_STATUS_LABELS,
     formatCurrency,
     formatDate,
+    formatDateOnly,
     formatNumber,
     PAYMENT_METHOD_LABELS,
     SALE_STATUS_LABELS,
@@ -227,6 +229,55 @@ function SaleDetail({
                                 </TableBody>
                             </Table>
                         </div>
+
+                        {sale.customer && (
+                            <div className="space-y-1 rounded-xl border bg-muted/30 p-3 text-sm">
+                                <p className="flex justify-between">
+                                    <span className="text-muted-foreground">
+                                        Client
+                                    </span>
+                                    <span className="font-medium">
+                                        {sale.customer.name}
+                                    </span>
+                                </p>
+                                {sale.credit_due_at && (
+                                    <p className="flex justify-between">
+                                        <span className="text-muted-foreground">
+                                            Échéance
+                                        </span>
+                                        <span className="tabular-nums">
+                                            {formatDateOnly(sale.credit_due_at)}
+                                        </span>
+                                    </p>
+                                )}
+                                {sale.payment_method === 'credit' && (
+                                    <p className="flex justify-between">
+                                        <span className="text-muted-foreground">
+                                            Encaissé
+                                        </span>
+                                        <span className="tabular-nums">
+                                            {formatCurrency(sale.paid_amount)}
+                                        </span>
+                                    </p>
+                                )}
+                                {sale.payment_method === 'credit' && (
+                                    <p className="flex justify-between">
+                                        <span className="text-muted-foreground">
+                                            Solde restant
+                                        </span>
+                                        <span
+                                            className={
+                                                sale.balance > 0.01
+                                                    ? 'font-medium text-red-600 tabular-nums dark:text-red-400'
+                                                    : 'font-medium tabular-nums'
+                                            }
+                                        >
+                                            {formatCurrency(sale.balance)}
+                                        </span>
+                                    </p>
+                                )}
+                            </div>
+                        )}
 
                         {sale.mobile_phone && (
                             <p className="text-sm">
@@ -441,6 +492,7 @@ export default function Sales({ sales, filters }: Props) {
                             <TableRow>
                                 <TableHead>Référence</TableHead>
                                 <TableHead>Date</TableHead>
+                                <TableHead>Client</TableHead>
                                 <TableHead className="text-right">
                                     Articles
                                 </TableHead>
@@ -472,6 +524,17 @@ export default function Sales({ sales, filters }: Props) {
                                     <TableCell className="text-muted-foreground">
                                         {formatDate(sale.created_at)}
                                     </TableCell>
+                                    <TableCell>
+                                        {sale.customer ? (
+                                            <span className="text-sm font-medium">
+                                                {sale.customer.name}
+                                            </span>
+                                        ) : (
+                                            <span className="text-muted-foreground">
+                                                —
+                                            </span>
+                                        )}
+                                    </TableCell>
                                     <TableCell className="text-right tabular-nums">
                                         {formatNumber(sale.items.length)}
                                     </TableCell>
@@ -479,17 +542,41 @@ export default function Sales({ sales, filters }: Props) {
                                         {formatCurrency(sale.total)}
                                     </TableCell>
                                     <TableCell>
-                                        {sale.payment_label}
-                                        {sale.mobile_phone && (
-                                            <div className="text-xs text-muted-foreground">
-                                                {sale.mobile_phone}
-                                            </div>
-                                        )}
-                                        {sale.tax_percent > 0 && (
-                                            <div className="text-xs text-muted-foreground">
-                                                TVA {sale.tax_percent}%
-                                            </div>
-                                        )}
+                                        <div className="flex flex-col gap-1">
+                                            <span>{sale.payment_label}</span>
+                                            {sale.payment_method ===
+                                                'credit' && (
+                                                <Badge
+                                                    variant="outline"
+                                                    className={`w-fit ${sale.credit_status === 'overdue' ? 'border-red-500/20 bg-red-500/10 text-red-600 dark:text-red-400' : sale.credit_status === 'outstanding' ? 'border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400' : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'}`}
+                                                >
+                                                    {
+                                                        CREDIT_STATUS_LABELS[
+                                                            sale.credit_status
+                                                        ]
+                                                    }
+                                                    {sale.balance > 0.01 && (
+                                                        <span className="tabular-nums">
+                                                            {' '}
+                                                            ·{' '}
+                                                            {formatCurrency(
+                                                                sale.balance,
+                                                            )}
+                                                        </span>
+                                                    )}
+                                                </Badge>
+                                            )}
+                                            {sale.mobile_phone && (
+                                                <span className="text-xs text-muted-foreground">
+                                                    {sale.mobile_phone}
+                                                </span>
+                                            )}
+                                            {sale.tax_percent > 0 && (
+                                                <span className="text-xs text-muted-foreground">
+                                                    TVA {sale.tax_percent}%
+                                                </span>
+                                            )}
+                                        </div>
                                     </TableCell>
                                     <TableCell>
                                         <Badge
@@ -554,7 +641,9 @@ export default function Sales({ sales, filters }: Props) {
                                                 <Eye />
                                             </Button>
                                             {canDelete &&
-                                                sale.status === 'completed' && (
+                                                sale.status === 'completed' &&
+                                                (sale.payments?.length ?? 0) ===
+                                                    0 && (
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
@@ -576,7 +665,7 @@ export default function Sales({ sales, filters }: Props) {
                             {sales.data.length === 0 && (
                                 <TableRow>
                                     <TableCell
-                                        colSpan={9}
+                                        colSpan={10}
                                         className="h-40 text-center text-muted-foreground"
                                     >
                                         <div className="flex flex-col items-center gap-2">

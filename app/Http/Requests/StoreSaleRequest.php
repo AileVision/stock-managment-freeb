@@ -37,12 +37,22 @@ class StoreSaleRequest extends FormRequest
             'mobile_phone' => ['nullable', 'string', 'max:20'],
             'mobile_reference' => ['nullable', 'string', 'max:100'],
             'notes' => ['nullable', 'string', 'max:1000'],
+            // Vente à crédit (B2B) : le client et l'échéance sont obligatoires.
+            'customer_id' => [
+                'nullable',
+                Rule::requiredIf(fn () => in_array($this->input('payment_method'), Sale::CUSTOMER_PAYMENT_METHODS, true)),
+                'exists:customers,id',
+            ],
+            'credit_due_at' => ['nullable', 'required_if:payment_method,credit', 'date', 'after_or_equal:today'],
+            // Acompte éventuel encaissé au moment de la vente à crédit.
+            'down_payment' => ['nullable', 'numeric', 'min:0'],
+            'down_payment_method' => ['nullable', Rule::in(['cash', 'card', 'transfer', 'tmoney', 'flooz'])],
         ];
     }
 
     /**
-     * The referenced session must still be open and mobile payments require
-     * a phone number.
+     * The referenced session must still be open, mobile payments require a
+     * phone number and credit sales need a consistent down payment.
      */
     public function withValidator(\Illuminate\Validation\Validator $validator): void
     {
@@ -60,6 +70,18 @@ class StoreSaleRequest extends FormRequest
                     $validator->errors()->add('mobile_phone', 'Le numéro de téléphone mobile est obligatoire pour ce mode de paiement.');
                 } elseif (preg_match('/^[0-9+ ]{6,20}$/', $phone) !== 1) {
                     $validator->errors()->add('mobile_phone', 'Le numéro de téléphone mobile est invalide.');
+                }
+            }
+
+            if ($this->input('payment_method') === 'credit') {
+                $downPayment = (float) ($this->input('down_payment') ?? 0);
+
+                if ($downPayment > 0 && $this->input('down_payment_method') === null) {
+                    $validator->errors()->add('down_payment_method', 'Choisissez le mode de paiement de l’acompte.');
+                }
+
+                if ($downPayment < 0) {
+                    $validator->errors()->add('down_payment', 'L’acompte ne peut pas être négatif.');
                 }
             }
         });
@@ -82,6 +104,14 @@ class StoreSaleRequest extends FormRequest
             'items.*.quantity.max' => 'La quantité ne doit pas dépasser 9999999.',
             'payment_method.required' => 'Veuillez choisir un mode de paiement.',
             'payment_method.in' => 'Le mode de paiement sélectionné n’est pas valide.',
+            'customer_id.required' => 'Un client est obligatoire pour cette vente.',
+            'customer_id.exists' => 'Le client sélectionné n’existe pas.',
+            'credit_due_at.required_if' => 'La date d’échéance est obligatoire pour une vente à crédit.',
+            'credit_due_at.date' => 'La date d’échéance n’est pas valide.',
+            'credit_due_at.after_or_equal' => 'La date d’échéance doit être aujourd’hui ou plus tard.',
+            'down_payment.numeric' => 'L’acompte doit être un nombre.',
+            'down_payment.min' => 'L’acompte doit être positif ou nul.',
+            'down_payment_method.in' => 'Le mode de paiement de l’acompte n’est pas valide.',
             'warehouse_id.exists' => 'L’entrepôt sélectionné n’existe pas.',
             'tax_rate_id.exists' => 'Le taux de TVA sélectionné n’existe pas.',
             'mobile_phone.max' => 'Le numéro de téléphone ne doit pas dépasser 20 caractères.',

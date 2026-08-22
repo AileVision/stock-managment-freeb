@@ -214,7 +214,19 @@ export default function FinancialReport({
                         value={formatCurrency(summary.revenue)}
                         hint={`${formatNumber(summary.sales_count)} vente${
                             summary.sales_count > 1 ? 's' : ''
-                        } validée${summary.sales_count > 1 ? 's' : ''}`}
+                        } comptabilisée${summary.sales_count > 1 ? 's' : ''}${
+                            summary.credit_excluded > 0
+                                ? ` · ${formatNumber(summary.credit_excluded_count)} créance${
+                                      summary.credit_excluded_count > 1
+                                          ? 's'
+                                          : ''
+                                  } exclue${
+                                      summary.credit_excluded_count > 1
+                                          ? 's'
+                                          : ''
+                                  }`
+                                : ''
+                        }`}
                         icon={Banknote}
                         iconClass="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                     />
@@ -264,6 +276,32 @@ export default function FinancialReport({
                         iconClass="bg-sky-500/10 text-sky-600 dark:text-sky-400"
                     />
                 </div>
+
+                {summary.credit_excluded > 0 && (
+                    <div className="flex flex-col gap-2 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+                        <p className="flex items-start gap-2 text-amber-700 dark:text-amber-300">
+                            <TrendingUp className="mt-0.5 size-4 shrink-0" />
+                            <span>
+                                {formatNumber(summary.credit_excluded_count)}{' '}
+                                vente
+                                {summary.credit_excluded_count > 1 ? 's' : ''} à
+                                crédit non encaissée
+                                {summary.credit_excluded_count > 1
+                                    ? 's'
+                                    : ''}{' '}
+                                exclue
+                                {summary.credit_excluded_count > 1 ? 's' : ''}{' '}
+                                du chiffre d’affaires :{' '}
+                                <strong className="tabular-nums">
+                                    {formatCurrency(summary.credit_excluded)}
+                                </strong>
+                            </span>
+                        </p>
+                        <p className="shrink-0 text-xs text-muted-foreground">
+                            Les créances ne comptent qu’une fois soldées.
+                        </p>
+                    </div>
+                )}
 
                 {!hasData && (
                     <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed py-14 text-center text-muted-foreground">
