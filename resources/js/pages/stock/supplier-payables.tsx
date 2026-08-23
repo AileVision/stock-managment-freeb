@@ -10,6 +10,8 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import InputError from '@/components/input-error';
+import { PaginationBar } from '@/components/pagination-bar';
+import { StatCard } from '@/components/stat-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -85,74 +87,6 @@ function PaymentBadge({ status }: { status: SupplierPayableOrder['payment_status
         <Badge variant="outline" className={cn('text-xs', styles[status])}>
             {SUPPLIER_PAYMENT_LABELS[status]}
         </Badge>
-    );
-}
-
-function StatCard({
-    icon,
-    label,
-    value,
-    tone = 'default',
-}: {
-    icon: React.ReactNode;
-    label: string;
-    value: string;
-    tone?: 'default' | 'danger' | 'accent';
-}) {
-    const tones: Record<string, string> = {
-        default: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-        danger: 'bg-red-500/10 text-red-600 dark:text-red-400',
-        accent: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
-    };
-
-    return (
-        <div className="flex items-start gap-3 rounded-xl border p-4">
-            <span
-                className={`flex size-10 shrink-0 items-center justify-center rounded-full ${tones[tone]}`}
-            >
-                {icon}
-            </span>
-            <div>
-                <p className="text-xs text-muted-foreground">{label}</p>
-                <p className="text-lg font-semibold tabular-nums">{value}</p>
-            </div>
-        </div>
-    );
-}
-
-function PaginationBar({ pagination }: { pagination: Paginated<SupplierPayableSupplier> }) {
-    const go = (url: string | null) => {
-        if (!url) return;
-        router.get(url, {}, { preserveState: true });
-    };
-
-    return (
-        <div className="flex items-center justify-between px-2 py-4 text-sm text-muted-foreground">
-            <span>
-                {pagination.total} résultat{pagination.total > 1 ? 's' : ''}
-            </span>
-            <div className="flex gap-1">
-                <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={!pagination.prev_page_url}
-                    onClick={() => go(pagination.prev_page_url)}
-                >
-                    ← Précédent
-                </Button>
-                <span className="flex items-center px-3 text-xs">
-                    {pagination.current_page}/{pagination.last_page}
-                </span>
-                <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={!pagination.next_page_url}
-                    onClick={() => go(pagination.next_page_url)}
-                >
-                    Suivant →
-                </Button>
-            </div>
-        </div>
     );
 }
 
@@ -460,7 +394,7 @@ export default function SupplierPayables({ suppliers, stats, filters, supplier_d
                                 )}
                             </TableBody>
                         </Table>
-                        <PaginationBar pagination={suppliers} />
+                        <PaginationBar pagination={suppliers} label="fournisseur(s)" />
                     </div>
                 )}
 

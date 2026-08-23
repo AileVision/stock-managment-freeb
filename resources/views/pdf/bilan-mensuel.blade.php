@@ -236,7 +236,27 @@
             <div class="summary-title">Synthèse du mois</div>
 
             <div class="summary-line">
-                <span>Chiffre d'affaires HT</span>
+                <span>Chiffre d'affaires TTC</span>
+                <span>{{ $money((float) $closing->revenue) }}</span>
+            </div>
+            <div class="summary-line">
+                <span>− Achats TTC</span>
+                <span>{{ $money((float) $closing->purchases) }}</span>
+            </div>
+            <div class="summary-line">
+                <span>− Dépenses d'exploitation</span>
+                <span>{{ $money((float) $closing->expenses) }}</span>
+            </div>
+            <div class="summary-line total">
+                <span>= Résultat net</span>
+                <span>{{ $money((float) $closing->net_result) }}</span>
+            </div>
+        </div>
+
+        <div class="summary-box" style="margin-top: 10px;">
+            <div class="summary-title">Marge commerciale (HT)</div>
+            <div class="summary-line">
+                <span>CA HT</span>
                 <span>{{ $money((float) $closing->revenue_ht) }}</span>
             </div>
             <div class="summary-line">
@@ -246,14 +266,6 @@
             <div class="summary-line total">
                 <span>= Marge brute</span>
                 <span>{{ $money((float) $closing->gross_margin) }}</span>
-            </div>
-            <div class="summary-line">
-                <span>− Dépenses d'exploitation</span>
-                <span>{{ $money((float) $closing->expenses) }}</span>
-            </div>
-            <div class="summary-line">
-                <span>− TVA à reverser</span>
-                <span>{{ $money(max((float) $closing->vat_net, 0)) }}</span>
             </div>
         </div>
 

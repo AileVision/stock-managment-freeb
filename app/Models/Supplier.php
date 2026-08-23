@@ -55,20 +55,26 @@ class Supplier extends Model
 
     /**
      * The total outstanding debt across all purchase orders.
+     * Uses a fresh query to avoid relying on eager-loaded collections.
      */
     public function outstandingBalance(): float
     {
-        return round((float) $this->purchaseOrders->sum(
+        $orders = $this->purchaseOrders()->with(['items.product', 'payments'])->get();
+
+        return round((float) $orders->sum(
             fn (PurchaseOrder $order): float => max($order->balance(), 0),
         ), 2);
     }
 
     /**
      * The part of the outstanding balance that is past due.
+     * Uses a fresh query to avoid relying on eager-loaded collections.
      */
     public function overdueBalance(): float
     {
-        return round((float) $this->purchaseOrders->sum(
+        $orders = $this->purchaseOrders()->with(['items.product', 'payments'])->get();
+
+        return round((float) $orders->sum(
             fn (PurchaseOrder $order): float => $order->isOverdue() ? $order->balance() : 0.0,
         ), 2);
     }

@@ -3,6 +3,8 @@ import { Banknote, Download, Plus, Search, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import InputError from '@/components/input-error';
+import { PaginationBar } from '@/components/pagination-bar';
+import { StatCard } from '@/components/stat-card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -72,33 +74,6 @@ const CATEGORY_COLORS: Record<string, string> = {
     fiscalite: 'bg-red-500/10 text-red-600 dark:text-red-400',
     divers: 'bg-slate-500/10 text-slate-600 dark:text-slate-400',
 };
-
-function StatCard({
-    icon,
-    label,
-    value,
-    hint,
-}: {
-    icon: React.ReactNode;
-    label: string;
-    value: string;
-    hint?: string;
-}) {
-    return (
-        <div className="flex items-start gap-3 rounded-xl border p-4">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-red-500/10 text-red-600 dark:text-red-400">
-                {icon}
-            </span>
-            <div className="min-w-0">
-                <p className="text-xs text-muted-foreground">{label}</p>
-                <p className="text-lg font-semibold tabular-nums">{value}</p>
-                {hint && (
-                    <p className="text-xs text-muted-foreground">{hint}</p>
-                )}
-            </div>
-        </div>
-    );
-}
 
 function CreateDialog({
     categories,
@@ -330,62 +305,6 @@ function CreateDialog({
     );
 }
 
-function PaginationBar({
-    pagination,
-}: {
-    pagination: Paginated<Expense>;
-}) {
-    const go = (url: string | null) => {
-        if (!url) {
-            return;
-        }
-
-        router.get(url, {}, { preserveState: true });
-    };
-
-    const numberedLinks = pagination.links.filter(
-        (link) => !Number.isNaN(Number(link.label)),
-    );
-
-    return (
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-muted-foreground">
-                {formatNumber(pagination.total)} dépense
-                {pagination.total > 1 ? 's' : ''} — page{' '}
-                {pagination.current_page} sur {pagination.last_page}
-            </p>
-            <div className="flex items-center gap-1">
-                <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={!pagination.prev_page_url}
-                    onClick={() => go(pagination.prev_page_url)}
-                >
-                    Précédent
-                </Button>
-                {numberedLinks.map((link) => (
-                    <Button
-                        key={link.label}
-                        size="sm"
-                        variant={link.active ? 'default' : 'outline'}
-                        onClick={() => go(link.url)}
-                    >
-                        {link.label}
-                    </Button>
-                ))}
-                <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={!pagination.next_page_url}
-                    onClick={() => go(pagination.next_page_url)}
-                >
-                    Suivant
-                </Button>
-            </div>
-        </div>
-    );
-}
-
 export default function Expenses({
     expenses,
     stats,
@@ -522,6 +441,7 @@ export default function Expenses({
                         label="Total période"
                         value={formatCurrency(stats.total)}
                         hint={`${formatNumber(stats.count)} dépense${stats.count > 1 ? 's' : ''}`}
+                        tone="danger"
                     />
                     {Object.entries(stats.by_category)
                         .sort(([, a], [, b]) => b - a)
@@ -696,7 +616,7 @@ export default function Expenses({
                     </Table>
                 </div>
 
-                <PaginationBar pagination={expenses} />
+                <PaginationBar pagination={expenses} label="dépense(s)" />
             </div>
 
             {createOpen && (

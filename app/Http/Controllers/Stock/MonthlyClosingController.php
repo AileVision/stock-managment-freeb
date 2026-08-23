@@ -9,7 +9,6 @@ use App\Models\MonthlyClosing;
 use App\Models\PurchaseOrder;
 use App\Models\Sale;
 use App\Models\SaleItem;
-use App\Models\TaxRate;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -51,6 +50,11 @@ class MonthlyClosingController extends Controller
      */
     public function preview(Request $request): Response
     {
+        $request->validate([
+            'year' => ['required', 'integer', 'min:2020', 'max:' . (now()->year + 1)],
+            'month' => ['required', 'integer', 'min:1', 'max:12'],
+        ]);
+
         $year = (int) $request->input('year', now()->subMonth()->year);
         $month = (int) $request->input('month', now()->subMonth()->month);
 
@@ -240,8 +244,9 @@ class MonthlyClosingController extends Controller
         // ── TVA nette ────────────────────────────────────────────
         $vatNet = round($vatCollected - $purchasesVat, 2);
 
-        // ── Résultat net ─────────────────────────────────────────
-        $netResult = round($grossMargin - $purchasesVat - $expensesTotal, 2);
+        // ── Résultat net (flux de trésorerie) ───────────────────────
+        // CA TTC − Achats TTC − Dépenses TTC = résultat net réel.
+        $netResult = round($revenue - $purchasesTtc - $expensesTotal, 2);
 
         return [
             'revenue' => $revenue,

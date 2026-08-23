@@ -97,10 +97,21 @@ class SupplierPayablesController extends Controller
     public function storePayment(StoreSupplierPaymentRequest $request): RedirectResponse
     {
         $validated = $request->validated();
+        $amount = (float) $validated['amount'];
 
-        $order = PurchaseOrder::query()->with('supplier')->findOrFail((int) $validated['purchase_order_id']);
+        $order = DB::transaction(function () use ($validated, $amount, $request): PurchaseOrder {
+            // Lock the order row to prevent concurrent payments from exceeding the balance.
+            $order = PurchaseOrder::query()
+                ->lockForUpdate()
+                ->with(['items.product'])
+                ->findOrFail((int) $validated['purchase_order_id']);
 
-        DB::transaction(function () use ($validated, $order, $request): void {
+            $balance = $order->balance();
+
+            if ($amount > $balance + 0.01) {
+                abort(422, "Le montant dépasse le solde restant de {$balance} FCFA.");
+            }
+
             SupplierPayment::create([
                 'purchase_order_id' => $order->id,
                 'supplier_id' => $order->supplier_id,
@@ -114,9 +125,11 @@ class SupplierPayablesController extends Controller
                 'paid_at' => now(),
             ]);
 
-            // Update the paid_amount on the order.
+            // Recalculate the total paid amount from all payments.
             $totalPaid = $order->payments()->sum('amount');
             $order->update(['paid_amount' => round((float) $totalPaid, 2)]);
+
+            return $order;
         });
 
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Paiement fournisseur enregistré avec succès.']);
@@ -192,7 +205,7 @@ class SupplierPayablesController extends Controller
         return Supplier::query()
             ->with([
                 'purchaseOrders' => fn ($query) => $query
-                    ->with(['payments']),
+                    ->with(['items.product:id,name,sku,unit,purchase_price', 'payments.user:id,name']),
             ])
             ->whereHas('purchaseOrders')
             ->get()

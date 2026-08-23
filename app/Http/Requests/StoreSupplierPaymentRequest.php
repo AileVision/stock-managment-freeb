@@ -2,7 +2,6 @@
 
 namespace App\Http\Requests;
 
-use App\Models\PurchaseOrder;
 use App\Models\SupplierPayment;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
@@ -43,19 +42,6 @@ class StoreSupplierPaymentRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator): void {
-            $order = PurchaseOrder::query()->with('payments')->find((int) $this->input('purchase_order_id'));
-
-            if ($order === null) {
-                return;
-            }
-
-            $amount = (float) $this->input('amount');
-            $balance = $order->balance();
-
-            if ($amount > $balance + 0.01) {
-                $validator->errors()->add('amount', "Le montant dépasse le solde restant de {$balance} FCFA.");
-            }
-
             if (in_array($this->input('payment_method'), SupplierPayment::MOBILE_PAYMENT_METHODS, true)) {
                 $phone = trim((string) $this->input('mobile_phone'));
 

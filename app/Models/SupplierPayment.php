@@ -14,6 +14,8 @@ use Illuminate\Support\Carbon;
  * @property int|null $user_id
  * @property string $amount
  * @property string $payment_method
+ * @property string|null $mobile_phone
+ * @property string|null $mobile_reference
  * @property string|null $reference
  * @property string|null $notes
  * @property Carbon $paid_at
@@ -23,7 +25,7 @@ use Illuminate\Support\Carbon;
  * @property-read Supplier|null $supplier
  * @property-read User|null $user
  */
-#[Fillable(['purchase_order_id', 'supplier_id', 'user_id', 'amount', 'payment_method', 'reference', 'notes', 'paid_at'])]
+#[Fillable(['purchase_order_id', 'supplier_id', 'user_id', 'amount', 'payment_method', 'mobile_phone', 'mobile_reference', 'reference', 'notes', 'paid_at'])]
 class SupplierPayment extends Model
 {
     /**

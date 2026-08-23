@@ -1,5 +1,5 @@
 import { Head, router, useForm } from '@inertiajs/react';
-import { Calendar, CheckCircle, Download, Eye, FileText, Plus, XCircle } from 'lucide-react';
+import { Calendar, Download, Eye, FileText, Plus, XCircle } from 'lucide-react';
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -56,7 +56,7 @@ function ResultBadge({ value }: { value: number }) {
     if (value < 0) {
         return <Badge className="bg-red-500/10 text-red-600 dark:text-red-400">{formatCurrency(value)}</Badge>;
     }
-    return <Badge className="bg-gray-500/10 text-gray-600 dark:text-gray-400">0,00 €</Badge>;
+    return <Badge className="bg-gray-500/10 text-gray-600 dark:text-gray-400">{formatCurrency(0)}</Badge>;
 }
 
 export default function MonthlyClosings({ closings, proposal }: Props) {
@@ -220,14 +220,24 @@ export default function MonthlyClosings({ closings, proposal }: Props) {
                                                 {closing.user && <span className="ml-1">— {closing.user.name}</span>}
                                             </TableCell>
                                             <TableCell className="text-right">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    title="Voir le PDF"
-                                                    onClick={() => window.location.href = stock.monthlyClosings.pdf({ closing: closing.id }).url}
-                                                >
-                                                    <FileText className="h-4 w-4" />
-                                                </Button>
+                                                <div className="flex justify-end gap-1">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        title="Aperçu"
+                                                        onClick={() => openPreview(closing.year, closing.month)}
+                                                    >
+                                                        <Eye className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        title="Télécharger le PDF"
+                                                        onClick={() => window.location.href = stock.monthlyClosings.pdf({ closing: closing.id }).url}
+                                                    >
+                                                        <FileText className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     ))
