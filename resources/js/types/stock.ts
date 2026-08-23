@@ -513,6 +513,19 @@ export type StockTransfer = {
 
 export type PurchaseOrderStatus = 'draft' | 'ordered' | 'partial' | 'received';
 
+export type PurchaseOrderPaymentStatus = 'unpaid' | 'partial' | 'paid';
+
+export type SupplierPayment = {
+    id: number;
+    amount: number;
+    payment_method: PaymentMethod;
+    payment_label: string;
+    reference: string | null;
+    notes: string | null;
+    paid_at: string;
+    user: { id: number; name: string } | null;
+};
+
 export type PurchaseOrder = {
     id: number;
     supplier_id: number | null;
@@ -526,6 +539,12 @@ export type PurchaseOrder = {
     total_quantity: number;
     received_quantity: number;
     progress: number;
+    due_at: string | null;
+    paid_amount: number;
+    balance: number;
+    payment_status: PurchaseOrderPaymentStatus;
+    payment_label: string;
+    is_overdue: boolean;
     created_at: string;
     user: { id: number; name: string } | null;
     supplier: Pick<Supplier, 'id' | 'name'> | null;
@@ -538,6 +557,140 @@ export type PurchaseOrder = {
         remaining: number;
         product: Pick<Product, 'id' | 'name' | 'sku' | 'unit'>;
     }[];
+    payments?: SupplierPayment[];
+};
+
+export type SupplierPayableStats = {
+    total_outstanding: number;
+    overdue_total: number;
+    suppliers_with_balance: number;
+    overdue_orders: number;
+};
+
+export type SupplierPayableSupplier = {
+    id: number;
+    name: string;
+    phone: string | null;
+    email: string | null;
+    address: string | null;
+    orders_count: number;
+    total_due: number;
+    total_paid: number;
+    balance: number;
+    overdue_balance: number;
+    overdue_orders: number;
+};
+
+export type SupplierPayableOrder = {
+    id: number;
+    reference: string | null;
+    status: PurchaseOrderStatus;
+    created_at: string;
+    due_at: string | null;
+    total: number;
+    paid_amount: number;
+    balance: number;
+    payment_status: PurchaseOrderPaymentStatus;
+    payment_label: string;
+    is_overdue: boolean;
+    items: {
+        id: number;
+        product_id: number;
+        quantity: number;
+        received_quantity: number;
+        unit_price: number;
+        product: Pick<Product, 'id' | 'name' | 'sku' | 'unit'>;
+    }[];
+    payments: SupplierPayment[];
+};
+
+export type SupplierPayableDetail = {
+    id: number;
+    name: string;
+    phone: string | null;
+    email: string | null;
+    address: string | null;
+    balance: number;
+    overdue_balance: number;
+    orders: SupplierPayableOrder[];
+};
+
+export type ExpenseCategory =
+    | 'loyer'
+    | 'salaires'
+    | 'electricite'
+    | 'eau'
+    | 'transport'
+    | 'fournitures'
+    | 'entretien'
+    | 'communication'
+    | 'fiscalite'
+    | 'divers';
+
+export type ExpenseCategoryLabel = Record<ExpenseCategory, string>;
+
+export type Expense = {
+    id: number;
+    reference: string;
+    category: ExpenseCategory;
+    category_label: string;
+    amount: number;
+    payment_method: PaymentMethod;
+    payment_label: string;
+    expense_date: string;
+    description: string | null;
+    notes: string | null;
+    created_at: string;
+    user: { id: number; name: string } | null;
+};
+
+export type ExpenseStats = {
+    total: number;
+    count: number;
+    by_category: Record<string, number>;
+};
+
+export type MonthlyClosing = {
+    id: number;
+    year: number;
+    month: number;
+    label: string;
+    status: string;
+    revenue: number;
+    sales_count: number;
+    revenue_ht: number;
+    purchases: number;
+    purchases_ht: number;
+    purchases_count: number;
+    expenses: number;
+    expenses_count: number;
+    vat_collected: number;
+    vat_deductible: number;
+    vat_net: number;
+    gross_margin: number;
+    net_result: number;
+    notes: string | null;
+    closed_at: string;
+    user: { id: number; name: string } | null;
+};
+
+export type MonthlyClosingPreview = {
+    revenue: number;
+    sales_count: number;
+    revenue_ht: number;
+    purchases_ht: number;
+    purchases_ttc: number;
+    purchases_count: number;
+    expenses: number;
+    expenses_count: number;
+    vat_collected: number;
+    vat_deductible: number;
+    vat_net: number;
+    gross_margin: number;
+    net_result: number;
+    credit_excluded: number;
+    credit_excluded_count: number;
+    already_closed: boolean;
 };
 
 export type ReplenishmentProduct = {

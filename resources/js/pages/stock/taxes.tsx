@@ -1,6 +1,8 @@
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import {
     Boxes,
+    Download,
+    FileText,
     Landmark,
     Pencil,
     Percent,
@@ -215,6 +217,16 @@ export default function Taxes({ tax_rates, vat }: Props) {
     const [editingRate, setEditingRate] = useState<TaxRate | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<TaxRate | null>(null);
 
+    const exportQuery: Record<string, string> = {};
+
+    if (from) {
+        exportQuery.from = from;
+    }
+
+    if (to) {
+        exportQuery.to = to;
+    }
+
     const openCreate = () => {
         setEditingRate(null);
         setDialogOpen(true);
@@ -294,6 +306,33 @@ export default function Taxes({ tax_rates, vat }: Props) {
                         }}
                     >
                         Réinitialiser
+                    </Button>
+                    <Button variant="outline" size="sm" asChild>
+                        <a
+                            href={
+                                stock.taxes.vatDeclaration.pdf({
+                                    query: exportQuery,
+                                }).url
+                            }
+                            target="_blank"
+                            rel="noreferrer"
+                        >
+                            <FileText />
+                            PDF
+                        </a>
+                    </Button>
+                    <Button variant="outline" size="sm" asChild>
+                        <a
+                            href={
+                                stock.taxes.vatDeclaration.csv({
+                                    query: exportQuery,
+                                }).url
+                            }
+                            download
+                        >
+                            <Download />
+                            CSV
+                        </a>
                     </Button>
                 </div>
 

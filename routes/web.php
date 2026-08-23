@@ -17,7 +17,10 @@ use App\Http\Controllers\Stock\ReportsController;
 use App\Http\Controllers\Stock\ReturnsController;
 use App\Http\Controllers\Stock\SalesController;
 use App\Http\Controllers\Stock\StockMovementController;
+use App\Http\Controllers\Stock\ExpenseController;
+use App\Http\Controllers\Stock\MonthlyClosingController;
 use App\Http\Controllers\Stock\SupplierController;
+use App\Http\Controllers\Stock\SupplierPayablesController;
 use App\Http\Controllers\Stock\TaxRateController;
 use App\Http\Controllers\Stock\TransferController;
 use App\Http\Controllers\Stock\WarehouseController;
@@ -128,6 +131,54 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'destroy'])
             ->middleware('can:purchase_orders.delete')
             ->name('stock.purchase-orders.destroy');
+
+        // Clôture comptable mensuelle.
+        Route::get('monthly-closings', [MonthlyClosingController::class, 'index'])
+            ->middleware('can:closings.view')
+            ->name('stock.monthly-closings.index');
+        Route::get('monthly-closings/preview', [MonthlyClosingController::class, 'preview'])
+            ->middleware('can:closings.view')
+            ->name('stock.monthly-closings.preview');
+        Route::post('monthly-closings', [MonthlyClosingController::class, 'store'])
+            ->middleware('can:closings.close')
+            ->name('stock.monthly-closings.store');
+        Route::get('monthly-closings/{closing}/pdf', [MonthlyClosingController::class, 'pdf'])
+            ->middleware('can:closings.view')
+            ->name('stock.monthly-closings.pdf');
+        Route::get('monthly-closings/export', [MonthlyClosingController::class, 'exportCsv'])
+            ->middleware('can:closings.view')
+            ->name('stock.monthly-closings.export');
+
+        // Dépenses d'exploitation.
+        Route::get('expenses', [ExpenseController::class, 'index'])
+            ->middleware('can:expenses.view')
+            ->name('stock.expenses.index');
+        Route::post('expenses', [ExpenseController::class, 'store'])
+            ->middleware('can:expenses.create')
+            ->name('stock.expenses.store');
+        Route::delete('expenses/{expense}', [ExpenseController::class, 'destroy'])
+            ->middleware('can:expenses.delete')
+            ->name('stock.expenses.destroy');
+        Route::get('expenses/export', [ExpenseController::class, 'exportCsv'])
+            ->middleware('can:expenses.view')
+            ->name('stock.expenses.export');
+
+        // Dettes fournisseurs : paiements partiels et suivi des échéances.
+        Route::get('supplier-payables', [SupplierPayablesController::class, 'index'])
+            ->middleware('can:supplier_payables.view')
+            ->name('stock.supplier-payables.index');
+        Route::get('supplier-payables/supplier/{supplier}', [SupplierPayablesController::class, 'supplier'])
+            ->middleware('can:supplier_payables.view')
+            ->name('stock.supplier-payables.supplier');
+        Route::post('supplier-payables/payments', [SupplierPayablesController::class, 'storePayment'])
+            ->middleware('can:supplier_payables.manage')
+            ->name('stock.supplier-payables.payments.store');
+        Route::get('supplier-payables/payments/{payment}/receipt', [SupplierPayablesController::class, 'receiptPdf'])
+            ->middleware('can:supplier_payables.manage')
+           ->name('stock.supplier-payables.payments.receipt');
+        Route::get('supplier-payables/export', [SupplierPayablesController::class, 'exportCsv'])
+            ->middleware('can:supplier_payables.manage')
+            ->name('stock.supplier-payables.export');
 
         Route::get('sales', [SalesController::class, 'index'])
             ->middleware('can:sales.view')
@@ -271,6 +322,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('taxes/{taxRate}', [TaxRateController::class, 'destroy'])
             ->middleware('can:taxes.manage')
             ->name('stock.taxes.destroy');
+
+        // Export déclaration TVA.
+        Route::get('taxes/vat-declaration/pdf', [TaxRateController::class, 'vatDeclarationPdf'])
+            ->middleware('can:taxes.view')
+            ->name('stock.taxes.vat-declaration.pdf');
+        Route::get('taxes/vat-declaration/csv', [TaxRateController::class, 'vatDeclarationCsv'])
+            ->middleware('can:taxes.view')
+            ->name('stock.taxes.vat-declaration.csv');
     });
 
     Route::prefix('admin')->group(function () {

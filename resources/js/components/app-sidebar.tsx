@@ -2,7 +2,9 @@ import { Link, usePage } from '@inertiajs/react';
 import {
     ArrowLeftRight,
     ArrowRightLeft,
+    Banknote,
     BarChart3,
+    CalendarCheck,
     ClipboardList,
     Contact,
     FileCheck2,
@@ -145,6 +147,15 @@ export function AppSidebar() {
                   },
               ]
             : []),
+        ...(permissions.includes('supplier_payables.view')
+            ? [
+                  {
+                      title: 'Dettes fournisseurs',
+                      href: stock.supplierPayables.index(),
+                      icon: Truck,
+                  },
+              ]
+            : []),
         ...(permissions.includes('quotes.view')
             ? [
                   {
@@ -197,6 +208,24 @@ export function AppSidebar() {
                       title: 'Rapport financier',
                       href: stock.reports.financial(),
                       icon: Landmark,
+                  },
+              ]
+            : []),
+        ...(permissions.includes('expenses.view')
+            ? [
+                  {
+                      title: 'Dépenses',
+                      href: stock.expenses.index(),
+                      icon: Banknote,
+                  },
+              ]
+            : []),
+        ...(permissions.includes('closings.view')
+            ? [
+                  {
+                      title: 'Clôture comptable',
+                      href: stock.monthlyClosings.index(),
+                      icon: CalendarCheck,
                   },
               ]
             : []),

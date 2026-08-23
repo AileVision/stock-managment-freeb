@@ -67,6 +67,7 @@ class PurchaseOrderController extends Controller
                 'tax_rate_id' => $validated['tax_rate_id'] ?? null,
                 'tax_percent' => $this->taxRatePercent((int) ($validated['tax_rate_id'] ?? 0)),
                 'user_id' => $request->user()->id,
+                'due_at' => $validated['due_at'] ?? null,
             ]);
 
             foreach ($validated['items'] as $item) {
@@ -210,6 +211,12 @@ class PurchaseOrderController extends Controller
             'total_quantity' => (int) $total,
             'received_quantity' => (int) $received,
             'progress' => $total > 0 ? (int) round($received / $total * 100) : 0,
+            'due_at' => $order->due_at,
+            'paid_amount' => (float) $order->paid_amount,
+            'balance' => $order->balance(),
+            'payment_status' => $order->paymentStatus(),
+            'payment_label' => $order->paymentStatusLabel(),
+            'is_overdue' => $order->isOverdue(),
             'created_at' => $order->created_at,
             'user' => $order->user,
             'items' => $order->items->map(fn (PurchaseOrderItem $item): array => [
