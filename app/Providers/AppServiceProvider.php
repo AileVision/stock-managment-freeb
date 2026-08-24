@@ -2,7 +2,10 @@
 
 namespace App\Providers;
 
+use App\Models\StockMovement;
 use App\Models\User;
+use App\Observers\StockMovementObserver;
+use App\Services\StockAlertService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -17,7 +20,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(StockAlertService::class);
     }
 
     /**
@@ -27,6 +30,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->configureDefaults();
         $this->configureSuperAdminAccess();
+        $this->configureObservers();
     }
 
     /**
@@ -36,6 +40,11 @@ class AppServiceProvider extends ServiceProvider
     protected function configureSuperAdminAccess(): void
     {
         Gate::before(fn (User $user): ?bool => $user->hasRole('superadmin') ? true : null);
+    }
+
+    protected function configureObservers(): void
+    {
+        StockMovement::observe(StockMovementObserver::class);
     }
 
     /**

@@ -19,6 +19,7 @@ use App\Http\Controllers\Stock\SalesController;
 use App\Http\Controllers\Stock\StockMovementController;
 use App\Http\Controllers\Stock\ExpenseController;
 use App\Http\Controllers\Stock\MonthlyClosingController;
+use App\Http\Controllers\Stock\NotificationsController;
 use App\Http\Controllers\Stock\SupplierController;
 use App\Http\Controllers\Stock\SupplierPayablesController;
 use App\Http\Controllers\Stock\TaxRateController;
@@ -330,6 +331,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('taxes/vat-declaration/csv', [TaxRateController::class, 'vatDeclarationCsv'])
             ->middleware('can:taxes.view')
             ->name('stock.taxes.vat-declaration.csv');
+
+        // Notifications (alertes stock, etc.).
+        Route::get('notifications', [NotificationsController::class, 'index'])
+            ->name('stock.notifications.index');
+        Route::get('notifications/unread-count', [NotificationsController::class, 'unreadCount'])
+            ->name('stock.notifications.unread-count');
+        Route::get('notifications/latest', [NotificationsController::class, 'latest'])
+            ->name('stock.notifications.latest');
+        Route::post('notifications/{notification}/read', [NotificationsController::class, 'markRead'])
+            ->name('stock.notifications.mark-read');
+        Route::post('notifications/read-all', [NotificationsController::class, 'markAllRead'])
+            ->name('stock.notifications.mark-all-read');
     });
 
     Route::prefix('admin')->group(function () {

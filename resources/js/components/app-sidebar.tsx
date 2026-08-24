@@ -13,6 +13,7 @@ import {
     HardDriveDownload,
     Landmark,
     LayoutGrid,
+    Bell,
     Package,
     PackagePlus,
     Percent,
@@ -29,6 +30,7 @@ import {
 } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavMain } from '@/components/nav-main';
+import { NotificationSidebarBadge } from '@/components/notification-sidebar-badge';
 import { NavUser } from '@/components/nav-user';
 import {
     Sidebar,
@@ -238,6 +240,12 @@ export function AppSidebar() {
                   },
               ]
             : []),
+        {
+            title: 'Notifications',
+            href: stock.notifications.index(),
+            icon: Bell,
+            badge: <NotificationSidebarBadge />,
+        },
     ];
 
     const adminNavItems: NavItem[] = [

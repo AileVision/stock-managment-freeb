@@ -9,6 +9,7 @@ use App\Models\CreditNote;
 use App\Models\Customer;
 use App\Models\CustomerPayment;
 use App\Models\Sale;
+use App\Services\StockAlertService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -145,6 +146,12 @@ class ReceivablesController extends Controller
                 'paid_at' => now(),
             ]);
         });
+
+        // Dismiss overdue alerts if the sale is now fully paid.
+        $sale->refresh();
+        if ($sale->creditStatus() === Sale::CREDIT_PAID) {
+            app(StockAlertService::class)->dismissReceivableOverdueAlerts($sale);
+        }
 
         // L'identifiant du paiement est transmis au front pour imprimer le reçu.
         Inertia::flash('payment_receipt', (int) $sale->payments()->latest('id')->value('id'));

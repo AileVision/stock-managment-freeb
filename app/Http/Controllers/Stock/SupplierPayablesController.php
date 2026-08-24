@@ -8,6 +8,7 @@ use App\Http\Requests\StoreSupplierPaymentRequest;
 use App\Models\PurchaseOrder;
 use App\Models\Supplier;
 use App\Models\SupplierPayment;
+use App\Services\StockAlertService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -131,6 +132,12 @@ class SupplierPayablesController extends Controller
 
             return $order;
         });
+
+        // Dismiss overdue alerts if the order is now fully paid.
+        $order->refresh();
+        if ($order->balance() <= 0.01) {
+            app(StockAlertService::class)->dismissSupplierOverdueAlerts($order);
+        }
 
         Inertia::flash('toast', ['type' => 'success', 'message' => 'Paiement fournisseur enregistré avec succès.']);
 

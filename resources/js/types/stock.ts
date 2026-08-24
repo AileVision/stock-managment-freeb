@@ -704,3 +704,15 @@ export type ReplenishmentProduct = {
     category: Pick<Category, 'id' | 'name'> | null;
     supplier: Pick<Supplier, 'id' | 'name'> | null;
 };
+
+export type NotificationType = 'stock_low' | 'stock_out' | 'receivable_overdue' | 'supplier_overdue';
+
+export type AppNotification = {
+    id: number;
+    type: NotificationType;
+    title: string;
+    message: string | null;
+    link: string | null;
+    is_read: boolean;
+    created_at: string;
+};
